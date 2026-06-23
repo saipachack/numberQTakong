@@ -88,13 +88,15 @@ function loadStateFromStorage() {
 function loadStateFromServer() {
     if (isCloudSyncActive && cloudRoomId) {
         const fetchStartTime = Date.now();
-        // Fetch from public ExtendsClass cloud
-        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}?t=${Date.now()}`)
+        // Fetch from keyvalue.immanuel.co
+        fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${cloudRoomId}?t=${Date.now()}`)
             .then(res => {
                 if (!res.ok) throw new Error("Cloud fetch failed");
                 return res.json();
             })
-            .then(data => {
+            .then(val => {
+                if (!val) return;
+                const data = JSON.parse(val);
                 if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
                     if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
                         state = data;
@@ -136,11 +138,12 @@ function saveStateToStorage() {
     isUpdatingNetwork = true;
     
     if (isCloudSyncActive && cloudRoomId) {
-        // Write to public ExtendsClass cloud
-        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json; charset=utf-8' },
-            body: JSON.stringify(state)
+        const trimmedState = getTrimmedState();
+        const valueToSend = encodeURIComponent(JSON.stringify(trimmedState));
+        // Write to keyvalue.immanuel.co
+        fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
+            method: 'POST',
+            body: ''
         })
         .then(res => {
             if (!res.ok) throw new Error("Cloud write failed");
@@ -185,6 +188,33 @@ function resetState() {
         avgWaitTimePerPerson: 5
     };
     saveStateToStorage();
+}
+
+function getTrimmedState() {
+    if (!state.queue) {
+        return {
+            queue: [],
+            ticketCounter: state.ticketCounter,
+            avgWaitTimePerPerson: state.avgWaitTimePerPerson
+        };
+    }
+    const waitingAndCalling = state.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
+    const completedOrSkipped = state.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
+    
+    // Sort completed/skipped by time descending
+    completedOrSkipped.sort((a, b) => b.rawTime - a.rawTime);
+    
+    // Keep only the most recent completed/skipped items (say 5 items)
+    const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 5);
+    
+    // Combine
+    const trimmedQueue = [...waitingAndCalling, ...trimmedCompletedOrSkipped];
+    
+    return {
+        queue: trimmedQueue,
+        ticketCounter: state.ticketCounter,
+        avgWaitTimePerPerson: state.avgWaitTimePerPerson
+    };
 }
 
 // UI Navigation / View Switching
@@ -611,38 +641,20 @@ function toggleOnlineSync(isActive) {
     
     if (isActive) {
         if (!cloudRoomId) {
-            // Create a new public ExtendsClass room
-            fetch('https://extendsclass.com/api/json-storage/bin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                body: JSON.stringify(state)
-            })
-            .then(res => {
-                if (!res.ok) throw new Error("Failed to create room");
-                return res.json();
-            })
-            .then(data => {
-                if (data && data.id) {
-                    return data.id;
-                }
-                throw new Error("Invalid response from storage server");
-            })
-            .then(id => {
-                cloudRoomId = id;
-                localStorage.setItem('snap_glow_cloud_room_id', id);
-                updateCloudUI();
-                lastWriteTime = Date.now();
-                saveStateToStorage(); // Push active state
-            })
-            .catch(err => {
-                console.error("Failed to initialize cloud room:", err);
-                alert("ບໍ່ສາມາດສ້າງຫ້ອງອອນລາຍໄດ້ໃນຂະນະນີ້. ກະລຸນາກວດສອບອິນເຕີເນັດ.");
+            const customId = prompt("ກະລຸນາປ້ອນ ID ຫ້ອງອອນລາຍທີ່ຕ້ອງການຕັ້ງ (ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1):\n(ໃຊ້ ID ດຽວກັນນີ້ໃນທຸກໜ້າຈໍເພື່ອໃຫ້ຂໍ້ມູນຊິ້ງກັນ)");
+            if (!customId || !customId.trim()) {
                 isCloudSyncActive = false;
                 localStorage.setItem('snap_glow_cloud_sync_active', false);
                 const syncToggle = document.getElementById('online-sync-toggle');
                 if (syncToggle) syncToggle.checked = false;
                 updateCloudUI();
-            });
+                return;
+            }
+            cloudRoomId = customId.trim();
+            localStorage.setItem('snap_glow_cloud_room_id', cloudRoomId);
+            updateCloudUI();
+            lastWriteTime = Date.now();
+            saveStateToStorage(); // Push active state
         } else {
             updateCloudUI();
             saveStateToStorage();
@@ -662,9 +674,9 @@ function updateCloudUI() {
         if (roomInput) roomInput.value = cloudRoomId;
         if (indicator) {
             indicator.className = "header-cloud-sync online";
-            // Show short Room ID in header
-            const shortId = cloudRoomId.slice(0, 8);
-            indicator.innerHTML = `<i data-lucide="cloud"></i> <span>Online: ${shortId}</span>`;
+            // Show full Room ID in header if it is reasonably short
+            const displayId = cloudRoomId.length > 15 ? cloudRoomId.slice(0, 12) + "..." : cloudRoomId;
+            indicator.innerHTML = `<i data-lucide="cloud"></i> <span>Online: ${displayId}</span>`;
         }
     } else {
         if (onlineRow) onlineRow.classList.add('hidden');
@@ -693,12 +705,30 @@ function connectToCloudRoom() {
     
     if (confirm("ຕ້ອງການເຊື່ອມຕໍ່ຫ້ອງນີ້? ຂໍ້ມູນຄິວປັດຈຸບັນໃນເຄື່ອງນີ້ຈະຖືກແທນທີ່ດ້ວຍຂໍ້ມູນອອນລາຍ.")) {
         // Fetch new room state to verify it works
-        fetch(`https://extendsclass.com/api/json-storage/bin/${inputVal}?t=${Date.now()}`)
+        fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${inputVal}?t=${Date.now()}`)
             .then(res => {
                 if (!res.ok) throw new Error("Invalid room ID");
                 return res.json();
             })
-            .then(data => {
+            .then(val => {
+                if (!val) {
+                    // Room is empty or new. Auto-initialize with local queue state so it's super easy to sync.
+                    cloudRoomId = inputVal;
+                    isCloudSyncActive = true;
+                    localStorage.setItem('snap_glow_cloud_room_id', inputVal);
+                    localStorage.setItem('snap_glow_cloud_sync_active', true);
+                    
+                    document.getElementById('connect-room-id').value = '';
+                    const syncToggle = document.getElementById('online-sync-toggle');
+                    if (syncToggle) syncToggle.checked = true;
+                    
+                    updateCloudUI();
+                    saveStateToStorage(); // Pushes active state to the newly created room ID
+                    renderAll();
+                    alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${inputVal}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
+                    return;
+                }
+                const data = JSON.parse(val);
                 if (validateState(data)) {
                     cloudRoomId = inputVal;
                     isCloudSyncActive = true;
@@ -722,14 +752,27 @@ function connectToCloudRoom() {
                 }
             })
             .catch(err => {
-                alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ບໍ່ພົບ Room ID ດັ່ງກ່າວ ຫຼື ໝົດອາຍຸແລ້ວ.");
+                // If network/fetch fails, fall back to initializing under this ID
+                cloudRoomId = inputVal;
+                isCloudSyncActive = true;
+                localStorage.setItem('snap_glow_cloud_room_id', inputVal);
+                localStorage.setItem('snap_glow_cloud_sync_active', true);
+                
+                document.getElementById('connect-room-id').value = '';
+                const syncToggle = document.getElementById('online-sync-toggle');
+                if (syncToggle) syncToggle.checked = true;
+                
+                updateCloudUI();
+                saveStateToStorage();
+                renderAll();
+                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${inputVal}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
             });
     }
 }
 
 function promptCloudRoom() {
     const currentStatus = isCloudSyncActive ? `ເຊື່ອມຕໍ່ຢູ່ໃນຫ້ອງ ID: ${cloudRoomId}\n\n` : '';
-    const inputVal = prompt(`${currentStatus}ປ້ອນ Cloud Room ID ເພື່ອຊິ້ງຂໍ້ມູນອອນລາຍ (ປ້ອນຄ່າວ່າງເພື່ອຍົກເລີກອອນລາຍ):`);
+    const inputVal = prompt(`${currentStatus}ປ້ອນ ID ຫ້ອງອອນລາຍ (ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1):\n(ປ້ອນຄ່າວ່າງເພື່ອຍົກເລີກອອນລາຍ)`);
     
     if (inputVal === null) return; // cancel click
     
@@ -746,12 +789,29 @@ function promptCloudRoom() {
     }
     
     const targetRoomId = inputVal.trim();
-    fetch(`https://extendsclass.com/api/json-storage/bin/${targetRoomId}?t=${Date.now()}`)
+    fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${targetRoomId}?t=${Date.now()}`)
         .then(res => {
             if (!res.ok) throw new Error("Invalid ID");
             return res.json();
         })
-        .then(data => {
+        .then(val => {
+            if (!val) {
+                // Room is empty or new. Auto-initialize with local queue state so it's super easy to sync.
+                cloudRoomId = targetRoomId;
+                isCloudSyncActive = true;
+                localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
+                localStorage.setItem('snap_glow_cloud_sync_active', true);
+                
+                const syncToggle = document.getElementById('online-sync-toggle');
+                if (syncToggle) syncToggle.checked = true;
+                
+                updateCloudUI();
+                saveStateToStorage(); // Pushes active state to the newly created room ID
+                renderAll();
+                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
+                return;
+            }
+            const data = JSON.parse(val);
             if (validateState(data)) {
                 cloudRoomId = targetRoomId;
                 isCloudSyncActive = true;
@@ -771,7 +831,19 @@ function promptCloudRoom() {
             }
         })
         .catch(err => {
-            alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ບໍ່ພົບ Room ID ດັ່ງກ່າວ ຫຼື ໝົດອາຍຸແລ້ວ.");
+            // Fallback for network error / key not found
+            cloudRoomId = targetRoomId;
+            isCloudSyncActive = true;
+            localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
+            localStorage.setItem('snap_glow_cloud_sync_active', true);
+            
+            const syncToggle = document.getElementById('online-sync-toggle');
+            if (syncToggle) syncToggle.checked = true;
+            
+            updateCloudUI();
+            saveStateToStorage();
+            renderAll();
+            alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
         });
 }
 

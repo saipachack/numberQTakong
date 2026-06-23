@@ -251,14 +251,15 @@
                                         <input type="text" id="online-room-id" class="form-select" style="font-family: var(--font-outfit); font-weight: 600; flex: 1;" readonly>
                                         <button class="btn btn-secondary btn-sm" onclick="copyRoomID()" style="border-radius: 8px; margin-left: 5px; min-width: 44px;" title="ຄັດລອກ"><i data-lucide="copy"></i></button>
                                     </div>
-                                    <p class="setting-help" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">ປ້ອນ ID ນີ້ໃສ່ໜ້າຈໍອື່ນເພື່ອຊິ້ງຜ່ານອິນເຕີເນັດ</p>
+                                    <p class="setting-help" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">ປ້ອນ ID ນີ້ (ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1) ໃສ່ໜ້າຈໍອື່ນເພື່ອຊິ້ງຂໍ້ມູນຮ່ວມກັນ</p>
                                 </div>
                                 <div class="setting-row" id="connect-room-row">
                                     <label for="connect-room-id"><i data-lucide="link"></i> ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ (Join Room ID):</label>
                                     <div class="input-group" style="display: flex;">
-                                        <input type="text" id="connect-room-id" class="form-select" placeholder="ປ້ອນ ID ຫ້ອງ..." style="font-family: var(--font-outfit); flex: 1;">
+                                        <input type="text" id="connect-room-id" class="form-select" placeholder="ປ້ອນ ID ຫ້ອງ (ຕົວຢ່າງ: 1, 2, 3, group1)..." style="font-family: var(--font-outfit); flex: 1;">
                                         <button class="btn btn-primary btn-sm" onclick="connectToCloudRoom()" style="border-radius: 8px; margin-left: 5px; min-width: 80px;">ເຊື່ອມຕໍ່</button>
                                     </div>
+                                    <p class="setting-help" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1 (ໃຊ້ ID ດຽວກັນກັບທຸກອຸປະກອນເພື່ອຊິ້ງຂໍ້ມູນ)</p>
                                 </div>
                                 <div class="setting-row button-row">
                                     <button class="btn btn-danger btn-sm" onclick="confirmResetQueue()">
