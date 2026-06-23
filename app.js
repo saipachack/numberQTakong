@@ -548,7 +548,7 @@ function renderAll() {
     } else {
         waitingTableBody.innerHTML = waitingList.map(item => `
             <tr>
-                <td style="font-family: var(--font-outfit); font-weight: 700; font-size: 1.1rem; color: white; vertical-align: middle;">${item.number}</td>
+                <td style="font-family: var(--font-outfit); font-weight: 700; font-size: 1.1rem; color: var(--text-main); vertical-align: middle;">${item.number}</td>
                 <td style="color: var(--text-muted); vertical-align: middle;">${item.timestamp}</td>
                 <td style="vertical-align: middle;">
                     <button class="op-table-btn skip" onclick="opSkip('${item.id}')" title="ຂ້າມຄິວ (Skip)">
