@@ -1,0 +1,113 @@
+{
+  "queue": [
+    {
+      "id": "q_1782238291979",
+      "number": "Q-001",
+      "status": "completed",
+      "timestamp": "01:11",
+      "rawTime": 1782238291979,
+      "completedAt": "01:13"
+    },
+    {
+      "id": "q_1782238294001",
+      "number": "Q-002",
+      "status": "completed",
+      "timestamp": "01:11",
+      "rawTime": 1782238294001,
+      "completedAt": "01:13"
+    },
+    {
+      "id": "q_1782238295202",
+      "number": "Q-003",
+      "status": "completed",
+      "timestamp": "01:11",
+      "rawTime": 1782238295202,
+      "completedAt": "01:13"
+    },
+    {
+      "id": "q_1782238296420",
+      "number": "Q-004",
+      "status": "completed",
+      "timestamp": "01:11",
+      "rawTime": 1782238296420,
+      "completedAt": "01:14"
+    },
+    {
+      "id": "q_1782238303089",
+      "number": "Q-005",
+      "status": "completed",
+      "timestamp": "01:11",
+      "rawTime": 1782238303089,
+      "completedAt": "01:14"
+    },
+    {
+      "id": "q_1782238305956",
+      "number": "Q-006",
+      "status": "completed",
+      "timestamp": "01:11",
+      "rawTime": 1782238305956,
+      "completedAt": "01:14"
+    },
+    {
+      "id": "q_1782238384321",
+      "number": "Q-007",
+      "status": "completed",
+      "timestamp": "01:13",
+      "rawTime": 1782238384321,
+      "completedAt": "01:14"
+    },
+    {
+      "id": "q_1782238386723",
+      "number": "Q-008",
+      "status": "completed",
+      "timestamp": "01:13",
+      "rawTime": 1782238386723,
+      "completedAt": "01:14"
+    },
+    {
+      "id": "q_1782238390071",
+      "number": "Q-009",
+      "status": "completed",
+      "timestamp": "01:13",
+      "rawTime": 1782238390071,
+      "completedAt": "01:17"
+    },
+    {
+      "id": "q_1782238598129",
+      "number": "Q-010",
+      "status": "calling",
+      "timestamp": "01:16",
+      "rawTime": 1782238598129
+    },
+    {
+      "id": "q_1782238673359",
+      "number": "Q-011",
+      "status": "waiting",
+      "timestamp": "01:17",
+      "rawTime": 1782238673359
+    },
+    {
+      "id": "q_1782238682278",
+      "number": "Q-012",
+      "status": "waiting",
+      "timestamp": "01:18",
+      "rawTime": 1782238682278
+    },
+    {
+      "id": "q_1782238685802",
+      "number": "Q-013",
+      "status": "waiting",
+      "timestamp": "01:18",
+      "rawTime": 1782238685802
+    },
+    {
+      "id": "q_1782238689688",
+      "number": "Q-014",
+      "status": "waiting",
+      "timestamp": "01:18",
+      "rawTime": 1782238689688
+    }
+  ],
+  "ticketCounter": 15,
+  "avgWaitTimePerPerson": 5
+}
