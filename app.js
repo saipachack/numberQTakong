@@ -76,8 +76,8 @@ function loadStateFromStorage() {
 
 function loadStateFromServer() {
     if (isCloudSyncActive && cloudRoomId) {
-        // Fetch from public JSONBlob cloud
-        fetch(`https://jsonblob.com/api/jsonBlob/${cloudRoomId}`)
+        // Fetch from public ExtendsClass cloud
+        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}`)
             .then(res => {
                 if (!res.ok) throw new Error("Cloud fetch failed");
                 return res.json();
@@ -123,8 +123,8 @@ function saveStateToStorage() {
     isUpdatingNetwork = true;
     
     if (isCloudSyncActive && cloudRoomId) {
-        // Write to public JSONBlob cloud
-        fetch(`https://jsonblob.com/api/jsonBlob/${cloudRoomId}`, {
+        // Write to public ExtendsClass cloud
+        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
             body: JSON.stringify(state)
@@ -594,22 +594,21 @@ function toggleOnlineSync(isActive) {
     
     if (isActive) {
         if (!cloudRoomId) {
-            // Create a new public JSONBlob room
-            fetch('https://jsonblob.com/api/jsonBlob', {
+            // Create a new public ExtendsClass room
+            fetch('https://extendsclass.com/api/json-storage/bin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json; charset=utf-8' },
                 body: JSON.stringify(state)
             })
             .then(res => {
-                const blobId = res.headers.get('x-jsonblob-id');
-                if (blobId) return blobId;
-                // Fallback parsing location path
-                const location = res.headers.get('location');
-                if (location) {
-                    const parts = location.split('/');
-                    return parts[parts.length - 1];
+                if (!res.ok) throw new Error("Failed to create room");
+                return res.json();
+            })
+            .then(data => {
+                if (data && data.id) {
+                    return data.id;
                 }
-                throw new Error("Failed to retrieve room ID");
+                throw new Error("Invalid response from storage server");
             })
             .then(id => {
                 cloudRoomId = id;
@@ -676,7 +675,7 @@ function connectToCloudRoom() {
     
     if (confirm("ຕ້ອງການເຊື່ອມຕໍ່ຫ້ອງນີ້? ຂໍ້ມູນຄິວປັດຈຸບັນໃນເຄື່ອງນີ້ຈະຖືກແທນທີ່ດ້ວຍຂໍ້ມູນອອນລາຍ.")) {
         // Fetch new room state to verify it works
-        fetch(`https://jsonblob.com/api/jsonBlob/${inputVal}`)
+        fetch(`https://extendsclass.com/api/json-storage/bin/${inputVal}`)
             .then(res => {
                 if (!res.ok) throw new Error("Invalid room ID");
                 return res.json();
@@ -725,7 +724,7 @@ function promptCloudRoom() {
     }
     
     const targetRoomId = inputVal.trim();
-    fetch(`https://jsonblob.com/api/jsonBlob/${targetRoomId}`)
+    fetch(`https://extendsclass.com/api/json-storage/bin/${targetRoomId}`)
         .then(res => {
             if (!res.ok) throw new Error("Invalid ID");
             return res.json();
