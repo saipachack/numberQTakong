@@ -87,7 +87,7 @@ function loadStateFromStorage() {
 function loadStateFromServer() {
     if (isCloudSyncActive && cloudRoomId) {
         // Fetch from public ExtendsClass cloud
-        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}`)
+        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}?t=${Date.now()}`)
             .then(res => {
                 if (!res.ok) throw new Error("Cloud fetch failed");
                 return res.json();
@@ -685,7 +685,7 @@ function connectToCloudRoom() {
     
     if (confirm("ຕ້ອງການເຊື່ອມຕໍ່ຫ້ອງນີ້? ຂໍ້ມູນຄິວປັດຈຸບັນໃນເຄື່ອງນີ້ຈະຖືກແທນທີ່ດ້ວຍຂໍ້ມູນອອນລາຍ.")) {
         // Fetch new room state to verify it works
-        fetch(`https://extendsclass.com/api/json-storage/bin/${inputVal}`)
+        fetch(`https://extendsclass.com/api/json-storage/bin/${inputVal}?t=${Date.now()}`)
             .then(res => {
                 if (!res.ok) throw new Error("Invalid room ID");
                 return res.json();
@@ -738,7 +738,7 @@ function promptCloudRoom() {
     }
     
     const targetRoomId = inputVal.trim();
-    fetch(`https://extendsclass.com/api/json-storage/bin/${targetRoomId}`)
+    fetch(`https://extendsclass.com/api/json-storage/bin/${targetRoomId}?t=${Date.now()}`)
         .then(res => {
             if (!res.ok) throw new Error("Invalid ID");
             return res.json();
