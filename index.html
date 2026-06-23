@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Takong Photobooth | ລະບົບຄິວຖ່າຍຮູບ</title>
+    <meta name="description" content="ລະບົບຈັດການຄິວຖ່າຍຮູບ Takong Photobooth ແບບທັນສະໄໝ, ຈອງຄິວງ່າຍ, ແຈ້ງເຕືອນດ້ວຍສຽງ ແລະ ໜ້າຈໍສະແດງຜົນແບບ Real-time.">
+    <!-- Google Fonts: Outfit, Playfair Display & Noto Sans Lao -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <!-- Icon library (Lucide icons via CDN) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Background glows -->
+    <div class="glow-bg">
+        <div class="glow-orb glow-1"></div>
+        <div class="glow-orb glow-2"></div>
+    </div>
+
+    <!-- Main Navigation Bar -->
+    <header class="app-header">
+        <div class="logo-area">
+            <img src="logo.png" alt="Takong Photography" class="logo-image">
+            <div class="logo-text">
+                <span>PHOTOBOOTH</span>
+            </div>
+        </div>
+        <div class="role-switcher">
+            <button class="nav-btn active" id="btn-kiosk" onclick="switchRole('kiosk')">
+                <i data-lucide="monitor-play"></i> ຕູ້ຄິວລູກຄ້າ (Kiosk)
+            </button>
+            <button class="nav-btn" id="btn-tv" onclick="switchRole('tv')">
+                <i data-lucide="tv"></i> ຈໍສະແດງຜົນ (TV)
+            </button>
+            <button class="nav-btn" id="btn-operator" onclick="switchRole('operator')">
+                <i data-lucide="sliders"></i> ລະບົບຄວບຄຸມ (Operator)
+            </button>
+        </div>
+        <div class="header-phone">
+            <i data-lucide="phone"></i> 020 9518 8888
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- 1. CUSTOMER KIOSK VIEW -->
+        <section id="view-kiosk" class="role-view active-view">
+            <div class="kiosk-layout">
+                <!-- Welcome & Button screen -->
+                <div class="step-content" id="step-welcome">
+                    <div class="kiosk-welcome-card glass-card">
+                        <h2>ຍິນດີຕ້ອນຮັບສູ່ Takong Photobooth 📸</h2>
+                        <p>ກະລຸນາກົດປຸ່ມດ້ານລຸ່ມເພື່ອຮັບໝາຍເລກຄິວຂອງທ່ານ</p>
+                        
+                        <button class="btn btn-primary btn-lg btn-get-queue" onclick="submitTicket()">
+                            <i data-lucide="ticket"></i> ກົດຮັບຄິວຖ່າຍຮູບ (Get Queue)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ticket Display screen (Take Photo / Remember Number) -->
+                <div class="step-content hidden" id="step-ticket">
+                    <div class="kiosk-ticket-container">
+                        <div class="ticket-card screen-ticket" id="ticket-print-area">
+                            <div class="ticket-glow"></div>
+                            <div class="ticket-header">
+                                <h3>TAKONG PHOTOBOOTH</h3>
+                                <p>Tel: 020 9518 8888</p>
+                            </div>
+                            <div class="ticket-body">
+                                <div class="ticket-number-label">ໝາຍເລກຄິວຂອງທ່ານແມ່ນ</div>
+                                <div class="ticket-number" id="ticket-display-number">Q-000</div>
+                                
+                                <div class="ticket-instructions glass-card">
+                                    <i data-lucide="smartphone"></i>
+                                    <p>ກະລຸນາ<strong>ຖ່າຍຮູບໜ້າຈໍນີ້</strong> ຫຼື <strong>ຈົດຈຳໝາຍເລກຄິວ</strong>ຂອງທ່ານໄວ້</p>
+                                </div>
+                            </div>
+                            <div class="ticket-footer">
+                                <div class="ticket-eta">
+                                    <i data-lucide="clock"></i> ເວລາລໍຖ້າປະມານ: <strong id="ticket-display-wait">10 ນາທີ</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. PUBLIC TV DASHBOARD VIEW -->
+        <section id="view-tv" class="role-view">
+            <div class="tv-layout">
+                <!-- TV Top Row: Active Serving -->
+                <div class="tv-serving-panel glass-card">
+                    <div class="serving-header">
+                        <h2><span class="pulse-indicator"></span> ພວມຖ່າຍຮູບຢູ່ (Now Serving)</h2>
+                    </div>
+                    <div class="serving-main">
+                        <div class="serving-number-box" id="tv-active-number">
+                            <span>- - -</span>
+                        </div>
+                        <div class="serving-info">
+                            <h3>ກະລຸນາເຂົ້າຫ້ອງຖ່າຍຮູບ</h3>
+                            <p>ຄິວທີ່ເອີ້ນ ໃຫ້ລາຍງານຕົວກັບພະນັກງານ</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TV Bottom Row: Queue Stats & Upcoming list -->
+                <div class="tv-grid">
+                    <!-- Left: Upcoming Queue -->
+                    <div class="tv-card glass-card">
+                        <div class="tv-card-header">
+                            <h3><i data-lucide="list-ordered"></i> ຄິວຖັດໄປ (Next in Line)</h3>
+                            <span class="count-badge" id="tv-waiting-count">0 ຄິວ</span>
+                        </div>
+                        <div class="tv-card-body">
+                            <div class="upcoming-list" id="tv-upcoming-list">
+                                <!-- Empty state -->
+                                <div class="list-empty">
+                                    <i data-lucide="inbox"></i>
+                                    <p>ບໍ່ມີຄິວລໍຖ້າໃນຂະນະນີ້</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Queue Stats / Info -->
+                    <div class="tv-card glass-card stats-panel">
+                        <div class="tv-card-header">
+                            <h3><i data-lucide="info"></i> ສະຖານະພາບລວມ</h3>
+                        </div>
+                        <div class="tv-card-body stats-grid">
+                            <div class="stat-box">
+                                <span class="stat-label">ຄິວທັງໝົດມື້ນີ້</span>
+                                <span class="stat-value" id="stat-total-today">0</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-label">ຄິວລໍຖ້າປະຈຸບັນ</span>
+                                <span class="stat-value" id="stat-waiting-now">0</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-label">ເວລາລໍຖ້າສະເລ່ຍ</span>
+                                <span class="stat-value highlight" id="stat-avg-wait">5 ນາທີ</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-label">ສຳເລັດແລ້ວ</span>
+                                <span class="stat-value" id="stat-completed-count">0</span>
+                            </div>
+                        </div>
+                        <div class="tv-promotion">
+                            <div class="promo-text">
+                                <h4>📸 ເພີດເພີນໄປກັບການຖ່າຍຮູບ!</h4>
+                                <p>ກະລຸນາກຽມພັອບ (Props) ທີ່ທ່ານມັກກ່ອນເຂົ້າຕູ້ຖ່າຍ</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. OPERATOR CONTROL PANEL VIEW -->
+        <section id="view-operator" class="role-view">
+            <div class="operator-layout">
+                <!-- Control dashboard statistics -->
+                <div class="operator-stats-row">
+                    <div class="op-stat-card glass-card">
+                        <div class="op-stat-icon magenta"><i data-lucide="users"></i></div>
+                        <div>
+                            <h4>ລໍຖ້າທັງໝົດ</h4>
+                            <p class="value" id="op-wait-total">0 ຄິວ</p>
+                        </div>
+                    </div>
+                    <div class="op-stat-card glass-card">
+                        <div class="op-stat-icon cyan"><i data-lucide="play"></i></div>
+                        <div>
+                            <h4>ຄິວປັດຈຸບັນ</h4>
+                            <p class="value" id="op-current-ticket">- - -</p>
+                        </div>
+                    </div>
+                    <div class="op-stat-card glass-card">
+                        <div class="op-stat-icon green"><i data-lucide="check-circle-2"></i></div>
+                        <div>
+                            <h4>ຖ່າຍສຳເລັດແລ້ວ</h4>
+                            <p class="value" id="op-completed-total">0 ຄິວ</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main operator workspace split -->
+                <div class="operator-grid">
+                    <!-- Left: Control Deck -->
+                    <div class="operator-card glass-card">
+                        <div class="op-card-header">
+                            <h3><i data-lucide="compass"></i> ແຜງຄວບຄຸມຄິວ</h3>
+                        </div>
+                        <div class="op-card-body control-deck">
+                            <div class="current-call-display">
+                                <span class="lbl">ກຳລັງຮຽກ/ກຳລັງຖ່າຍ</span>
+                                <h2 id="op-active-call-num">- - -</h2>
+                            </div>
+
+                            <div class="control-actions">
+                                <button class="btn btn-success btn-lg" onclick="opCallNext()" id="btn-call-next">
+                                    <i data-lucide="bell"></i> ຮຽກຄິວຖັດໄປ (Call Next)
+                                </button>
+                                <div class="action-sub-grid">
+                                    <button class="btn btn-secondary" onclick="opRecall()" id="btn-recall" disabled>
+                                        <i data-lucide="volume-2"></i> ຮຽກຊ້ຳ (Recall)
+                                    </button>
+                                    <button class="btn btn-primary" onclick="opComplete()" id="btn-complete" disabled>
+                                        <i data-lucide="check"></i> ເສັດສິ້ນ (Done)
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <hr class="op-divider">
+
+                            <div class="system-settings">
+                                <h4>ຕັ້ງຄ່າ ແລະ ລະບົບສຽງ</h4>
+                                <div class="setting-row">
+                                    <label for="voice-select"><i data-lucide="speech"></i> ເລືອກສຽງເວົ້າ:</label>
+                                    <select id="voice-select" class="form-select">
+                                        <option value="default">ສຽງລະບົບຫຼັກ (Default)</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row toggle-row">
+                                    <span><i data-lucide="music"></i> ເປີດສຽງດົນຕີເຕືອນ (Chime Effect)</span>
+                                    <label class="switch">
+                                        <input type="checkbox" id="chime-toggle" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="setting-row button-row">
+                                    <button class="btn btn-danger btn-sm" onclick="confirmResetQueue()">
+                                        <i data-lucide="trash-2"></i> ລ້າງຂໍ້ມູນຄິວທັງໝົດ (Reset)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Queue Table & Tabs -->
+                    <div class="operator-card glass-card">
+                        <div class="op-card-header tabs-header">
+                            <div class="op-tabs">
+                                <button class="tab-btn active" id="tab-waiting" onclick="switchOpTab('waiting')">
+                                    ຄິວລໍຖ້າ (<span id="count-tab-waiting">0</span>)
+                                </button>
+                                <button class="tab-btn" id="tab-completed" onclick="switchOpTab('completed')">
+                                    ປະຫວັດຄິວທີ່ສຳເລັດ (<span id="count-tab-completed">0</span>)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="op-card-body table-container">
+                            <!-- Waiting table -->
+                            <div class="table-wrapper" id="table-waiting-view">
+                                <table class="queue-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ຄິວ</th>
+                                            <th>ເວລາຈອງ</th>
+                                            <th>ຈັດການ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="table-waiting-body">
+                                        <!-- Dynamic contents -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Completed table -->
+                            <div class="table-wrapper hidden" id="table-completed-view">
+                                <table class="queue-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ຄິວ</th>
+                                            <th>ເວລາຈອງ</th>
+                                            <th>ສຳເລັດເມື່ອ</th>
+                                            <th>ສະຖານະ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="table-completed-body">
+                                        <!-- Dynamic contents -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>&copy; 2026 Takong Photobooth. Tel: 020 9518 8888. Designed with ❤️ for visual excellence.</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
