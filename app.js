@@ -60,11 +60,21 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // Load/Save State
+function validateState(data) {
+    return data && Array.isArray(data.queue) && typeof data.ticketCounter === 'number';
+}
+
 function loadStateFromStorage() {
     const savedState = localStorage.getItem('snap_glow_queue_state');
     if (savedState) {
         try {
-            state = JSON.parse(savedState);
+            const parsed = JSON.parse(savedState);
+            if (validateState(parsed)) {
+                state = parsed;
+            } else {
+                console.warn("Invalid state format in localStorage, resetting");
+                resetState();
+            }
         } catch (e) {
             console.error("Failed to parse queue state from localStorage", e);
             resetState();
@@ -84,7 +94,7 @@ function loadStateFromServer() {
             })
             .then(data => {
                 if (!isUpdatingNetwork) {
-                    if (JSON.stringify(state) !== JSON.stringify(data)) {
+                    if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
                         state = data;
                         localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
                         renderAll();
@@ -103,7 +113,7 @@ function loadStateFromServer() {
             })
             .then(data => {
                 if (!isUpdatingNetwork) {
-                    if (JSON.stringify(state) !== JSON.stringify(data)) {
+                    if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
                         state = data;
                         localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
                         renderAll();
@@ -681,23 +691,27 @@ function connectToCloudRoom() {
                 return res.json();
             })
             .then(data => {
-                cloudRoomId = inputVal;
-                isCloudSyncActive = true;
-                localStorage.setItem('snap_glow_cloud_room_id', inputVal);
-                localStorage.setItem('snap_glow_cloud_sync_active', true);
-                
-                // Clear input
-                document.getElementById('connect-room-id').value = '';
-                
-                // Set toggle checked
-                const syncToggle = document.getElementById('online-sync-toggle');
-                if (syncToggle) syncToggle.checked = true;
-                
-                state = data;
-                localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
-                updateCloudUI();
-                renderAll();
-                alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+                if (validateState(data)) {
+                    cloudRoomId = inputVal;
+                    isCloudSyncActive = true;
+                    localStorage.setItem('snap_glow_cloud_room_id', inputVal);
+                    localStorage.setItem('snap_glow_cloud_sync_active', true);
+                    
+                    // Clear input
+                    document.getElementById('connect-room-id').value = '';
+                    
+                    // Set toggle checked
+                    const syncToggle = document.getElementById('online-sync-toggle');
+                    if (syncToggle) syncToggle.checked = true;
+                    
+                    state = data;
+                    localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                    updateCloudUI();
+                    renderAll();
+                    alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+                } else {
+                    alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
+                }
             })
             .catch(err => {
                 alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ບໍ່ພົບ Room ID ດັ່ງກ່າວ ຫຼື ໝົດອາຍຸແລ້ວ.");
@@ -730,19 +744,23 @@ function promptCloudRoom() {
             return res.json();
         })
         .then(data => {
-            cloudRoomId = targetRoomId;
-            isCloudSyncActive = true;
-            localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
-            localStorage.setItem('snap_glow_cloud_sync_active', true);
-            
-            const syncToggle = document.getElementById('online-sync-toggle');
-            if (syncToggle) syncToggle.checked = true;
-            
-            state = data;
-            localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
-            updateCloudUI();
-            renderAll();
-            alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+            if (validateState(data)) {
+                cloudRoomId = targetRoomId;
+                isCloudSyncActive = true;
+                localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
+                localStorage.setItem('snap_glow_cloud_sync_active', true);
+                
+                const syncToggle = document.getElementById('online-sync-toggle');
+                if (syncToggle) syncToggle.checked = true;
+                
+                state = data;
+                localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                updateCloudUI();
+                renderAll();
+                alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+            } else {
+                alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
+            }
         })
         .catch(err => {
             alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ບໍ່ພົບ Room ID ດັ່ງກ່າວ ຫຼື ໝົດອາຍຸແລ້ວ.");
