@@ -13,6 +13,7 @@ let state = {
 const synth = window.speechSynthesis;
 let availableVoices = [];
 let isUpdatingNetwork = false;
+let lastWriteTime = 0;
 let cloudRoomId = localStorage.getItem('snap_glow_cloud_room_id') || '';
 let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 'true';
 
@@ -86,6 +87,7 @@ function loadStateFromStorage() {
 
 function loadStateFromServer() {
     if (isCloudSyncActive && cloudRoomId) {
+        const fetchStartTime = Date.now();
         // Fetch from public ExtendsClass cloud
         fetch(`https://extendsclass.com/api/json-storage/bin/${cloudRoomId}?t=${Date.now()}`)
             .then(res => {
@@ -93,7 +95,7 @@ function loadStateFromServer() {
                 return res.json();
             })
             .then(data => {
-                if (!isUpdatingNetwork) {
+                if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
                     if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
                         state = data;
                         localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
@@ -105,6 +107,7 @@ function loadStateFromServer() {
                 loadStateFromStorage();
             });
     } else {
+        const fetchStartTime = Date.now();
         // Fetch from local python server
         fetch('/api/state')
             .then(res => {
@@ -112,7 +115,7 @@ function loadStateFromServer() {
                 return res.json();
             })
             .then(data => {
-                if (!isUpdatingNetwork) {
+                if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
                     if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
                         state = data;
                         localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
@@ -145,10 +148,12 @@ function saveStateToStorage() {
         })
         .then(data => {
             isUpdatingNetwork = false;
+            lastWriteTime = Date.now();
         })
         .catch(err => {
             console.error("Failed to sync queue state to cloud:", err);
             isUpdatingNetwork = false;
+            lastWriteTime = Date.now();
         });
     } else {
         // Write to local python server
@@ -163,10 +168,12 @@ function saveStateToStorage() {
         })
         .then(data => {
             isUpdatingNetwork = false;
+            lastWriteTime = Date.now();
         })
         .catch(err => {
             console.error("Failed to sync queue state to server:", err);
             isUpdatingNetwork = false;
+            lastWriteTime = Date.now();
         });
     }
 }
@@ -624,6 +631,7 @@ function toggleOnlineSync(isActive) {
                 cloudRoomId = id;
                 localStorage.setItem('snap_glow_cloud_room_id', id);
                 updateCloudUI();
+                lastWriteTime = Date.now();
                 saveStateToStorage(); // Push active state
             })
             .catch(err => {
