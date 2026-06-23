@@ -12,16 +12,21 @@ let state = {
 // Web Speech Synthesis
 const synth = window.speechSynthesis;
 let availableVoices = [];
-
-
+let isUpdatingNetwork = false;
+let cloudRoomId = localStorage.getItem('snap_glow_cloud_room_id') || '';
+let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 'true';
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
     // Initialize icons
     lucide.createIcons();
     
-    // Load state from localStorage
-    loadStateFromStorage();
+    // Load state from server initially, fallback to local storage
+    loadStateFromServer();
+    
+    // Poll server every 1.2s for real-time queue updates across other devices
+    setInterval(loadStateFromServer, 1200);
+
     
     // Set up local storage listener for multi-window sync
     window.addEventListener('storage', (e) => {
@@ -35,6 +40,16 @@ document.addEventListener("DOMContentLoaded", () => {
     setupSpeechVoices();
     if (synth && synth.onvoiceschanged !== undefined) {
         synth.onvoiceschanged = setupSpeechVoices;
+    }
+
+    // Initialize Cloud Sync inputs & states
+    updateCloudUI();
+    const syncToggle = document.getElementById('online-sync-toggle');
+    if (syncToggle) {
+        syncToggle.checked = isCloudSyncActive;
+        syncToggle.addEventListener('change', (e) => {
+            toggleOnlineSync(e.target.checked);
+        });
     }
 
     // Default step initialization
@@ -59,10 +74,91 @@ function loadStateFromStorage() {
     }
 }
 
+function loadStateFromServer() {
+    if (isCloudSyncActive && cloudRoomId) {
+        // Fetch from public JSONBlob cloud
+        fetch(`https://jsonblob.com/api/jsonBlob/${cloudRoomId}`)
+            .then(res => {
+                if (!res.ok) throw new Error("Cloud fetch failed");
+                return res.json();
+            })
+            .then(data => {
+                if (!isUpdatingNetwork) {
+                    if (JSON.stringify(state) !== JSON.stringify(data)) {
+                        state = data;
+                        localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                        renderAll();
+                    }
+                }
+            })
+            .catch(err => {
+                loadStateFromStorage();
+            });
+    } else {
+        // Fetch from local python server
+        fetch('/api/state')
+            .then(res => {
+                if (!res.ok) throw new Error("Server error");
+                return res.json();
+            })
+            .then(data => {
+                if (!isUpdatingNetwork) {
+                    if (JSON.stringify(state) !== JSON.stringify(data)) {
+                        state = data;
+                        localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                        renderAll();
+                    }
+                }
+            })
+            .catch(err => {
+                loadStateFromStorage();
+            });
+    }
+}
+
 function saveStateToStorage() {
     localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
-    // Trigger render locally
     renderAll();
+    
+    isUpdatingNetwork = true;
+    
+    if (isCloudSyncActive && cloudRoomId) {
+        // Write to public JSONBlob cloud
+        fetch(`https://jsonblob.com/api/jsonBlob/${cloudRoomId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            body: JSON.stringify(state)
+        })
+        .then(res => {
+            if (!res.ok) throw new Error("Cloud write failed");
+            return res.json();
+        })
+        .then(data => {
+            isUpdatingNetwork = false;
+        })
+        .catch(err => {
+            console.error("Failed to sync queue state to cloud:", err);
+            isUpdatingNetwork = false;
+        });
+    } else {
+        // Write to local python server
+        fetch('/api/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            body: JSON.stringify(state)
+        })
+        .then(res => {
+            if (!res.ok) throw new Error("Server write failed");
+            return res.json();
+        })
+        .then(data => {
+            isUpdatingNetwork = false;
+        })
+        .catch(err => {
+            console.error("Failed to sync queue state to server:", err);
+            isUpdatingNetwork = false;
+        });
+    }
 }
 
 function resetState() {
@@ -488,3 +584,169 @@ function switchOpTab(tab) {
         document.getElementById('table-completed-view').classList.remove('hidden');
     }
 }
+
+// -------------------------------------------------------------
+// CLOUD SYNC HELPERS
+// -------------------------------------------------------------
+function toggleOnlineSync(isActive) {
+    isCloudSyncActive = isActive;
+    localStorage.setItem('snap_glow_cloud_sync_active', isActive);
+    
+    if (isActive) {
+        if (!cloudRoomId) {
+            // Create a new public JSONBlob room
+            fetch('https://jsonblob.com/api/jsonBlob', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                body: JSON.stringify(state)
+            })
+            .then(res => {
+                const blobId = res.headers.get('x-jsonblob-id');
+                if (blobId) return blobId;
+                // Fallback parsing location path
+                const location = res.headers.get('location');
+                if (location) {
+                    const parts = location.split('/');
+                    return parts[parts.length - 1];
+                }
+                throw new Error("Failed to retrieve room ID");
+            })
+            .then(id => {
+                cloudRoomId = id;
+                localStorage.setItem('snap_glow_cloud_room_id', id);
+                updateCloudUI();
+                saveStateToStorage(); // Push active state
+            })
+            .catch(err => {
+                console.error("Failed to initialize cloud room:", err);
+                alert("ບໍ່ສາມາດສ້າງຫ້ອງອອນລາຍໄດ້ໃນຂະນະນີ້. ກະລຸນາກວດສອບອິນເຕີເນັດ.");
+                isCloudSyncActive = false;
+                localStorage.setItem('snap_glow_cloud_sync_active', false);
+                const syncToggle = document.getElementById('online-sync-toggle');
+                if (syncToggle) syncToggle.checked = false;
+                updateCloudUI();
+            });
+        } else {
+            updateCloudUI();
+            saveStateToStorage();
+        }
+    } else {
+        updateCloudUI();
+    }
+}
+
+function updateCloudUI() {
+    const onlineRow = document.getElementById('online-room-row');
+    const roomInput = document.getElementById('online-room-id');
+    const indicator = document.getElementById('header-cloud-indicator');
+    
+    if (isCloudSyncActive && cloudRoomId) {
+        if (onlineRow) onlineRow.classList.remove('hidden');
+        if (roomInput) roomInput.value = cloudRoomId;
+        if (indicator) {
+            indicator.className = "header-cloud-sync online";
+            // Show short Room ID in header
+            const shortId = cloudRoomId.slice(0, 8);
+            indicator.innerHTML = `<i data-lucide="cloud"></i> <span>Online: ${shortId}</span>`;
+        }
+    } else {
+        if (onlineRow) onlineRow.classList.add('hidden');
+        if (indicator) {
+            indicator.className = "header-cloud-sync offline";
+            indicator.innerHTML = `<i data-lucide="cloud-off"></i> <span>Offline</span>`;
+        }
+    }
+    lucide.createIcons();
+}
+
+function copyRoomID() {
+    if (cloudRoomId) {
+        navigator.clipboard.writeText(cloudRoomId)
+            .then(() => alert("ຄັດລອກ Cloud Room ID ສຳເລັດແລ້ວ!"))
+            .catch(err => console.error("Clipboard write error:", err));
+    }
+}
+
+function connectToCloudRoom() {
+    const inputVal = document.getElementById('connect-room-id').value.trim();
+    if (!inputVal) {
+        alert("ກະລຸນາປ້ອນ Room ID ທີ່ຕ້ອງການເຊື່ອມຕໍ່");
+        return;
+    }
+    
+    if (confirm("ຕ້ອງການເຊື່ອມຕໍ່ຫ້ອງນີ້? ຂໍ້ມູນຄິວປັດຈຸບັນໃນເຄື່ອງນີ້ຈະຖືກແທນທີ່ດ້ວຍຂໍ້ມູນອອນລາຍ.")) {
+        // Fetch new room state to verify it works
+        fetch(`https://jsonblob.com/api/jsonBlob/${inputVal}`)
+            .then(res => {
+                if (!res.ok) throw new Error("Invalid room ID");
+                return res.json();
+            })
+            .then(data => {
+                cloudRoomId = inputVal;
+                isCloudSyncActive = true;
+                localStorage.setItem('snap_glow_cloud_room_id', inputVal);
+                localStorage.setItem('snap_glow_cloud_sync_active', true);
+                
+                // Clear input
+                document.getElementById('connect-room-id').value = '';
+                
+                // Set toggle checked
+                const syncToggle = document.getElementById('online-sync-toggle');
+                if (syncToggle) syncToggle.checked = true;
+                
+                state = data;
+                localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                updateCloudUI();
+                renderAll();
+                alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+            })
+            .catch(err => {
+                alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ບໍ່ພົບ Room ID ດັ່ງກ່າວ ຫຼື ໝົດອາຍຸແລ້ວ.");
+            });
+    }
+}
+
+function promptCloudRoom() {
+    const currentStatus = isCloudSyncActive ? `ເຊື່ອມຕໍ່ຢູ່ໃນຫ້ອງ ID: ${cloudRoomId}\n\n` : '';
+    const inputVal = prompt(`${currentStatus}ປ້ອນ Cloud Room ID ເພື່ອຊິ້ງຂໍ້ມູນອອນລາຍ (ປ້ອນຄ່າວ່າງເພື່ອຍົກເລີກອອນລາຍ):`);
+    
+    if (inputVal === null) return; // cancel click
+    
+    if (inputVal.trim() === '') {
+        // Turn off cloud sync
+        isCloudSyncActive = false;
+        localStorage.setItem('snap_glow_cloud_sync_active', false);
+        const syncToggle = document.getElementById('online-sync-toggle');
+        if (syncToggle) syncToggle.checked = false;
+        updateCloudUI();
+        renderAll();
+        alert("ຍົກເລີກການຊິ້ງອອນລາຍແລ້ວ. ລະບົບຈະກັບມາໃຊ້ Local Network.");
+        return;
+    }
+    
+    const targetRoomId = inputVal.trim();
+    fetch(`https://jsonblob.com/api/jsonBlob/${targetRoomId}`)
+        .then(res => {
+            if (!res.ok) throw new Error("Invalid ID");
+            return res.json();
+        })
+        .then(data => {
+            cloudRoomId = targetRoomId;
+            isCloudSyncActive = true;
+            localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
+            localStorage.setItem('snap_glow_cloud_sync_active', true);
+            
+            const syncToggle = document.getElementById('online-sync-toggle');
+            if (syncToggle) syncToggle.checked = true;
+            
+            state = data;
+            localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+            updateCloudUI();
+            renderAll();
+            alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+        })
+        .catch(err => {
+            alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ບໍ່ພົບ Room ID ດັ່ງກ່າວ ຫຼື ໝົດອາຍຸແລ້ວ.");
+        });
+}
+
