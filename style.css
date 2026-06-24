@@ -1263,7 +1263,7 @@ body {
     font-family: var(--font-outfit);
     font-size: 1.4rem;
     font-weight: 700;
-    color: white;
+    color: var(--text-main);
 }
 
 /* Operator Split Grid */
@@ -1603,6 +1603,41 @@ input:checked + .slider:before {
     
     .serving-number-box span {
         font-size: 4.5rem;
+    }
+    
+    /* Compact Operator Stats Row for Mobile */
+    .operator-stats-row {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .op-stat-card {
+        padding: 0.6rem 0.4rem;
+        gap: 0.4rem;
+        flex-direction: column;
+        text-align: center;
+        align-items: center;
+        border-radius: 12px;
+    }
+    
+    .op-stat-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+    }
+    
+    .op-stat-icon i {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .op-stat-card h4 {
+        font-size: 0.65rem;
+        margin-bottom: 0.1rem;
+    }
+    
+    .op-stat-card .value {
+        font-size: 0.95rem;
     }
 }
 
