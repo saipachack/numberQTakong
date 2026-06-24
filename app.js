@@ -1068,19 +1068,14 @@ function safeDecode(str) {
 // Highly compact representation for cloud synchronization (keeps segment size < 260 characters)
 function compressState(fullState) {
     const compressed = {
-<<<<<<< HEAD
         q: [],  // flat array of waiting: [num1, time1, num2, time2, ...]
         c: 0,   // calling ticket number (0 if none)
         ct: 0,  // calling ticket check-in time (minutes since midnight)
-=======
-        q: [],
->>>>>>> 9859f54265d3fe02db5c16fa074924e4c93c1c37
         tc: fullState.ticketCounter || 1,
         wt: fullState.avgWaitTimePerPerson || 5
     };
     
     if (fullState.queue && Array.isArray(fullState.queue)) {
-<<<<<<< HEAD
         const waitingTickets = fullState.queue.filter(item => item.status === 'waiting');
         const callingTicket = fullState.queue.find(item => item.status === 'calling');
         
@@ -1095,32 +1090,6 @@ function compressState(fullState) {
             const numVal = numMatch ? parseInt(numMatch[0], 10) : 0;
             const timeVal = timeToMinutes(item.timestamp);
             compressed.q.push(numVal, timeVal);
-=======
-        // Keep waiting and calling, plus only last 3 completed/skipped to save space
-        const waitingAndCalling = fullState.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
-        const completedOrSkipped = fullState.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
-        
-        completedOrSkipped.sort((a, b) => (b.rawTime || 0) - (a.rawTime || 0));
-        const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 3);
-        const trimmedQueue = [...waitingAndCalling, ...trimmedCompletedOrSkipped];
-        
-        compressed.q = trimmedQueue.map(item => {
-            const numMatch = item.number ? item.number.match(/\d+/) : null;
-            const numVal = numMatch ? parseInt(numMatch[0], 10) : 0;
-            
-            let statusCode = 'w';
-            if (item.status === 'calling') statusCode = 'c';
-            else if (item.status === 'completed') statusCode = 'd';
-            else if (item.status === 'skipped') statusCode = 's';
-            
-            return [
-                numVal,
-                item.timestamp || '',
-                statusCode,
-                item.completedAt || '',
-                item.rawTime || Date.now()
-            ];
->>>>>>> 9859f54265d3fe02db5c16fa074924e4c93c1c37
         });
     }
     return compressed;
@@ -1128,17 +1097,13 @@ function compressState(fullState) {
 
 function decompressState(comp) {
     if (!comp) return null;
-<<<<<<< HEAD
     
-=======
->>>>>>> 9859f54265d3fe02db5c16fa074924e4c93c1c37
     const full = {
         queue: [],
         ticketCounter: comp.tc || 1,
         avgWaitTimePerPerson: comp.wt || 5
     };
     
-<<<<<<< HEAD
     function minutesToTime(mins) {
         if (!mins) {
             const now = new Date();
@@ -1149,33 +1114,57 @@ function decompressState(comp) {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     }
     
-    if (comp.c) {
-        const formattedNumber = `Q-${String(comp.c).padStart(3, '0')}`;
-        full.queue.push({
-            id: 'q_call_' + comp.c,
-            number: formattedNumber,
-            status: 'calling',
-            timestamp: minutesToTime(comp.ct),
-            completedAt: '',
-            rawTime: Date.now()
-        });
-    }
-    
     if (comp.q && Array.isArray(comp.q)) {
-        for (let i = 0; i < comp.q.length; i += 2) {
-            const numVal = comp.q[i];
-            const timeVal = comp.q[i+1];
-            if (numVal === undefined) break;
-            
-            const formattedNumber = `Q-${String(numVal).padStart(3, '0')}`;
-            full.queue.push({
-                id: 'q_' + numVal,
-                number: formattedNumber,
-                status: 'waiting',
-                timestamp: minutesToTime(timeVal),
-                completedAt: '',
-                rawTime: Date.now() + i
+        if (comp.q.length > 0 && Array.isArray(comp.q[0])) {
+            // Backward compatibility for old array-of-arrays format
+            full.queue = comp.q.map(arr => {
+                const numVal = arr[0];
+                const prefix = 'Q';
+                const formattedNumber = `${prefix}-${String(numVal).padStart(3, '0')}`;
+                
+                let status = 'waiting';
+                if (arr[2] === 'c') status = 'calling';
+                else if (arr[2] === 'd') status = 'completed';
+                else if (arr[2] === 's') status = 'skipped';
+                
+                return {
+                    id: 'q_' + (arr[4] || Date.now() + Math.random()),
+                    number: formattedNumber,
+                    status: status,
+                    timestamp: arr[1] || '',
+                    completedAt: arr[3] || '',
+                    rawTime: arr[4] || Date.now()
+                };
             });
+        } else {
+            // New flat integer array format
+            if (comp.c) {
+                const formattedNumber = `Q-${String(comp.c).padStart(3, '0')}`;
+                full.queue.push({
+                    id: 'q_call_' + comp.c,
+                    number: formattedNumber,
+                    status: 'calling',
+                    timestamp: minutesToTime(comp.ct),
+                    completedAt: '',
+                    rawTime: Date.now()
+                });
+            }
+            
+            for (let i = 0; i < comp.q.length; i += 2) {
+                const numVal = comp.q[i];
+                const timeVal = comp.q[i+1];
+                if (numVal === undefined) break;
+                
+                const formattedNumber = `Q-${String(numVal).padStart(3, '0')}`;
+                full.queue.push({
+                    id: 'q_' + numVal,
+                    number: formattedNumber,
+                    status: 'waiting',
+                    timestamp: minutesToTime(timeVal),
+                    completedAt: '',
+                    rawTime: Date.now() + i
+                });
+            }
         }
     }
     
@@ -1194,33 +1183,6 @@ function timeToMinutes(timestampStr) {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
 }
-
-=======
-    if (comp.q && Array.isArray(comp.q)) {
-        full.queue = comp.q.map(arr => {
-            const numVal = arr[0];
-            const prefix = 'Q';
-            const formattedNumber = `${prefix}-${String(numVal).padStart(3, '0')}`;
-            
-            let status = 'waiting';
-            if (arr[2] === 'c') status = 'calling';
-            else if (arr[2] === 'd') status = 'completed';
-            else if (arr[2] === 's') status = 'skipped';
-            
-            return {
-                id: 'q_' + (arr[4] || Date.now() + Math.random()),
-                number: formattedNumber,
-                status: status,
-                timestamp: arr[1] || '',
-                completedAt: arr[3] || '',
-                rawTime: arr[4] || Date.now()
-            };
-        });
-    }
-    return full;
-}
-
->>>>>>> 9859f54265d3fe02db5c16fa074924e4c93c1c37
 function compressPresence(presenceMap) {
     const arr = [];
     const now = Date.now();
