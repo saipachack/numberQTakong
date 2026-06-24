@@ -116,15 +116,23 @@ function loadStateFromServer() {
                 if (!val) return;
                 let data;
                 try {
-                    data = JSON.parse(hexToString(val));
+                    const decoded = safeDecode(val);
+                    const parsed = JSON.parse(decoded);
+                    if (parsed && (parsed.q || parsed.queue)) {
+                        data = parsed.q ? decompressState(parsed) : parsed;
+                    }
                 } catch (e) {
                     try {
-                        data = JSON.parse(decodeURIComponent(val));
+                        data = JSON.parse(hexToString(val));
                     } catch (e2) {
                         try {
-                            data = JSON.parse(val);
+                            data = JSON.parse(decodeURIComponent(val));
                         } catch (e3) {
-                            return;
+                            try {
+                                data = JSON.parse(val);
+                            } catch (e4) {
+                                return;
+                            }
                         }
                     }
                 }
@@ -170,7 +178,8 @@ function saveStateToStorage() {
     
     if (isCloudSyncActive && cloudRoomId) {
         const trimmedState = getTrimmedState();
-        const valueToSend = stringToHex(JSON.stringify(trimmedState));
+        const compressed = compressState(trimmedState);
+        const valueToSend = safeEncode(JSON.stringify(compressed));
         // Write to keyvalue.immanuel.co
         fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
             method: 'POST',
@@ -728,17 +737,28 @@ function connectToCloudRoomById(targetRoomId) {
             let data;
             let isValid = false;
             try {
-                data = JSON.parse(hexToString(val));
-                if (validateState(data)) isValid = true;
-            } catch (e) {
-                try {
-                    data = JSON.parse(decodeURIComponent(val));
+                const decoded = safeDecode(val);
+                const parsed = JSON.parse(decoded);
+                if (parsed && (parsed.q || parsed.queue)) {
+                    data = parsed.q ? decompressState(parsed) : parsed;
                     if (validateState(data)) isValid = true;
-                } catch (e2) {
+                }
+            } catch (e) {}
+            
+            if (!isValid) {
+                try {
+                    data = JSON.parse(hexToString(val));
+                    if (validateState(data)) isValid = true;
+                } catch (e) {
                     try {
-                        data = JSON.parse(val);
+                        data = JSON.parse(decodeURIComponent(val));
                         if (validateState(data)) isValid = true;
-                    } catch (e3) {}
+                    } catch (e2) {
+                        try {
+                            data = JSON.parse(val);
+                            if (validateState(data)) isValid = true;
+                        } catch (e3) {}
+                    }
                 }
             }
             
@@ -883,14 +903,24 @@ function syncDevicePresence() {
             let presenceMap = {};
             if (val) {
                 try {
-                    presenceMap = JSON.parse(hexToString(val));
-                } catch(e) {
+                    const decoded = safeDecode(val);
+                    const parsed = JSON.parse(decoded);
+                    if (Array.isArray(parsed)) {
+                        presenceMap = decompressPresence(parsed);
+                    } else {
+                        presenceMap = parsed;
+                    }
+                } catch (e) {
                     try {
-                        presenceMap = JSON.parse(decodeURIComponent(val));
+                        presenceMap = JSON.parse(hexToString(val));
                     } catch(e2) {
                         try {
-                            presenceMap = JSON.parse(val);
-                        } catch(e3) {}
+                            presenceMap = JSON.parse(decodeURIComponent(val));
+                        } catch(e3) {
+                            try {
+                                presenceMap = JSON.parse(val);
+                            } catch(e4) {}
+                        }
                     }
                 }
             }
@@ -917,7 +947,8 @@ function syncDevicePresence() {
             activeDevicesCount = count;
             updatePresenceUI(activeMap);
             
-            const valToSend = stringToHex(JSON.stringify(activeMap));
+            const compressed = compressPresence(activeMap);
+            const valToSend = safeEncode(JSON.stringify(compressed));
             fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${presenceKey}/${valToSend}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -977,6 +1008,152 @@ function updatePresenceUI(activeMap) {
     
     container.innerHTML = html;
     lucide.createIcons();
+}
+
+// Custom URL-safe encoding/decoding to prevent IIS path validation and segment length issues
+function safeEncode(str) {
+    if (!str) return '';
+    return str
+        .replace(/_/g, '_U')
+        .replace(/:/g, '_C')
+        .replace(/,/g, '_K')
+        .replace(/\{/g, '_L')
+        .replace(/\}/g, '_R')
+        .replace(/\[/g, '_A')
+        .replace(/\]/g, '_B')
+        .replace(/"/g, '_Q')
+        .replace(/\//g, '_S')
+        .replace(/\+/g, '_P')
+        .replace(/=/g, '_E');
+}
+
+function safeDecode(str) {
+    if (!str) return '';
+    return str
+        .replace(/_E/g, '=')
+        .replace(/_P/g, '+')
+        .replace(/_S/g, '/')
+        .replace(/_Q/g, '"')
+        .replace(/_B/g, ']')
+        .replace(/_A/g, '[')
+        .replace(/_R/g, '}')
+        .replace(/_L/g, '{')
+        .replace(/_K/g, ',')
+        .replace(/_C/g, ':')
+        .replace(/_U/g, '_');
+}
+
+// Highly compact representation for cloud synchronization (keeps segment size < 260 characters)
+function compressState(fullState) {
+    const compressed = {
+        q: [],
+        tc: fullState.ticketCounter || 1,
+        wt: fullState.avgWaitTimePerPerson || 5
+    };
+    
+    if (fullState.queue && Array.isArray(fullState.queue)) {
+        // Keep waiting and calling, plus only last 3 completed/skipped to save space
+        const waitingAndCalling = fullState.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
+        const completedOrSkipped = fullState.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
+        
+        completedOrSkipped.sort((a, b) => (b.rawTime || 0) - (a.rawTime || 0));
+        const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 3);
+        const trimmedQueue = [...waitingAndCalling, ...trimmedCompletedOrSkipped];
+        
+        compressed.q = trimmedQueue.map(item => {
+            const numMatch = item.number ? item.number.match(/\d+/) : null;
+            const numVal = numMatch ? parseInt(numMatch[0], 10) : 0;
+            
+            let statusCode = 'w';
+            if (item.status === 'calling') statusCode = 'c';
+            else if (item.status === 'completed') statusCode = 'd';
+            else if (item.status === 'skipped') statusCode = 's';
+            
+            return [
+                numVal,
+                item.timestamp || '',
+                statusCode,
+                item.completedAt || '',
+                item.rawTime || Date.now()
+            ];
+        });
+    }
+    return compressed;
+}
+
+function decompressState(comp) {
+    if (!comp) return null;
+    const full = {
+        queue: [],
+        ticketCounter: comp.tc || 1,
+        avgWaitTimePerPerson: comp.wt || 5
+    };
+    
+    if (comp.q && Array.isArray(comp.q)) {
+        full.queue = comp.q.map(arr => {
+            const numVal = arr[0];
+            const prefix = 'Q';
+            const formattedNumber = `${prefix}-${String(numVal).padStart(3, '0')}`;
+            
+            let status = 'waiting';
+            if (arr[2] === 'c') status = 'calling';
+            else if (arr[2] === 'd') status = 'completed';
+            else if (arr[2] === 's') status = 'skipped';
+            
+            return {
+                id: 'q_' + (arr[4] || Date.now() + Math.random()),
+                number: formattedNumber,
+                status: status,
+                timestamp: arr[1] || '',
+                completedAt: arr[3] || '',
+                rawTime: arr[4] || Date.now()
+            };
+        });
+    }
+    return full;
+}
+
+function compressPresence(presenceMap) {
+    const arr = [];
+    const now = Date.now();
+    for (const devId in presenceMap) {
+        if (now - presenceMap[devId].lastSeen < 15000) {
+            let roleCode = 'C';
+            if (presenceMap[devId].role === 'Operator') roleCode = 'O';
+            else if (presenceMap[devId].role === 'TV') roleCode = 'T';
+            else if (presenceMap[devId].role === 'Kiosk') roleCode = 'K';
+            
+            const cleanId = devId.replace('dev_', '');
+            arr.push([
+                cleanId,
+                roleCode,
+                Math.floor(presenceMap[devId].lastSeen / 1000)
+            ]);
+        }
+    }
+    return arr;
+}
+
+function decompressPresence(arr) {
+    const presenceMap = {};
+    if (!arr || !Array.isArray(arr)) return presenceMap;
+    
+    arr.forEach(item => {
+        const cleanId = item[0];
+        const roleCode = item[1];
+        const lastSeenSec = item[2];
+        
+        let role = 'Client';
+        if (roleCode === 'O') role = 'Operator';
+        else if (roleCode === 'T') role = 'TV';
+        else if (roleCode === 'K') role = 'Kiosk';
+        
+        presenceMap['dev_' + cleanId] = {
+            role: role,
+            lastSeen: lastSeenSec * 1000
+        };
+    });
+    return presenceMap;
 }
 
 // Hex Encoding/Decoding Helpers to prevent IIS path validation errors
