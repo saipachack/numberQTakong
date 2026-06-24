@@ -1157,7 +1157,7 @@ function compressCompactState(fullState) {
     const arr = compressState(fullState);
     if (!arr || arr.length < 4) return '';
     
-    let str = '';
+    let str = 'v'; // Version 2 prefix to distinguish from old 4-character time format
     str += toBase36(arr[0], 2); // ticketCounter (0-1295) -> 2 chars
     str += toBase36(arr[1], 1); // avgWaitTimePerPerson (0-35) -> 1 char
     str += toBase36(arr[2], 2); // calling ticket number (0-1295) -> 2 chars
@@ -1172,27 +1172,55 @@ function compressCompactState(fullState) {
 
 function decompressCompactState(str) {
     if (!str || typeof str !== 'string') return null;
-    if (!/^[0-9a-z]+$/.test(str) || str.length < 8) return null;
     
-    const ticketCounter = fromBase36(str.substring(0, 2));
-    const avgWaitTimePerPerson = fromBase36(str.substring(2, 3));
-    const callingNum = fromBase36(str.substring(3, 5));
-    const callingTime = fromBase36(str.substring(5, 8));
-    
-    const arr = [
-        ticketCounter,
-        avgWaitTimePerPerson,
-        callingNum,
-        callingTime
-    ];
-    
-    for (let i = 8; i + 5 <= str.length; i += 5) {
-        const numVal = fromBase36(str.substring(i, i + 2));
-        const timeVal = fromBase36(str.substring(i + 2, i + 5));
-        arr.push(numVal, timeVal);
+    if (str.startsWith('v')) {
+        // Version 2: 3-character time, 2-character ticket numbers
+        const payload = str.substring(1);
+        if (!/^[0-9a-z]+$/.test(payload) || payload.length < 8) return null;
+        
+        const ticketCounter = fromBase36(payload.substring(0, 2));
+        const avgWaitTimePerPerson = fromBase36(payload.substring(2, 3));
+        const callingNum = fromBase36(payload.substring(3, 5));
+        const callingTime = fromBase36(payload.substring(5, 8));
+        
+        const arr = [
+            ticketCounter,
+            avgWaitTimePerPerson,
+            callingNum,
+            callingTime
+        ];
+        
+        for (let i = 8; i + 5 <= payload.length; i += 5) {
+            const numVal = fromBase36(payload.substring(i, i + 2));
+            const timeVal = fromBase36(payload.substring(i + 2, i + 5));
+            arr.push(numVal, timeVal);
+        }
+        
+        return decompressState(arr);
+    } else {
+        // Version 1 (Backward Compatibility): Old 2-character time format
+        if (!/^[0-9a-z]+$/.test(str) || str.length < 7) return null;
+        
+        const ticketCounter = fromBase36(str.substring(0, 2));
+        const avgWaitTimePerPerson = fromBase36(str.substring(2, 3));
+        const callingNum = fromBase36(str.substring(3, 5));
+        const callingTime = fromBase36(str.substring(5, 7));
+        
+        const arr = [
+            ticketCounter,
+            avgWaitTimePerPerson,
+            callingNum,
+            callingTime
+        ];
+        
+        for (let i = 7; i + 4 <= str.length; i += 4) {
+            const numVal = fromBase36(str.substring(i, i + 2));
+            const timeVal = fromBase36(str.substring(i + 2, i + 4));
+            arr.push(numVal, timeVal);
+        }
+        
+        return decompressState(arr);
     }
-    
-    return decompressState(arr);
 }
 
 // Highly compact representation for cloud synchronization (keeps segment size < 260 characters)
