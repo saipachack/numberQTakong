@@ -97,12 +97,16 @@ function loadStateFromServer() {
                 if (!val) return;
                 let data;
                 try {
-                    data = JSON.parse(decodeURIComponent(val));
+                    data = JSON.parse(hexToString(val));
                 } catch (e) {
                     try {
-                        data = JSON.parse(val);
+                        data = JSON.parse(decodeURIComponent(val));
                     } catch (e2) {
-                        return;
+                        try {
+                            data = JSON.parse(val);
+                        } catch (e3) {
+                            return;
+                        }
                     }
                 }
                 if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
@@ -147,7 +151,7 @@ function saveStateToStorage() {
     
     if (isCloudSyncActive && cloudRoomId) {
         const trimmedState = getTrimmedState();
-        const valueToSend = encodeURIComponent(JSON.stringify(trimmedState));
+        const valueToSend = stringToHex(JSON.stringify(trimmedState));
         // Write to keyvalue.immanuel.co
         fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
             method: 'POST',
@@ -704,13 +708,18 @@ function connectToCloudRoomById(targetRoomId) {
             let data;
             let isValid = false;
             try {
-                data = JSON.parse(decodeURIComponent(val));
+                data = JSON.parse(hexToString(val));
                 if (validateState(data)) isValid = true;
             } catch (e) {
                 try {
-                    data = JSON.parse(val);
+                    data = JSON.parse(decodeURIComponent(val));
                     if (validateState(data)) isValid = true;
-                } catch (e2) {}
+                } catch (e2) {
+                    try {
+                        data = JSON.parse(val);
+                        if (validateState(data)) isValid = true;
+                    } catch (e3) {}
+                }
             }
             
             if (isValid) {
@@ -854,11 +863,15 @@ function syncDevicePresence() {
             let presenceMap = {};
             if (val) {
                 try {
-                    presenceMap = JSON.parse(decodeURIComponent(val));
+                    presenceMap = JSON.parse(hexToString(val));
                 } catch(e) {
                     try {
-                        presenceMap = JSON.parse(val);
-                    } catch(e2) {}
+                        presenceMap = JSON.parse(decodeURIComponent(val));
+                    } catch(e2) {
+                        try {
+                            presenceMap = JSON.parse(val);
+                        } catch(e3) {}
+                    }
                 }
             }
             
@@ -884,7 +897,7 @@ function syncDevicePresence() {
             activeDevicesCount = count;
             updatePresenceUI(activeMap);
             
-            const valToSend = encodeURIComponent(JSON.stringify(activeMap));
+            const valToSend = stringToHex(JSON.stringify(activeMap));
             fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${presenceKey}/${valToSend}`, {
                 method: 'POST',
                 body: ''
@@ -943,5 +956,23 @@ function updatePresenceUI(activeMap) {
     
     container.innerHTML = html;
     lucide.createIcons();
+}
+
+// Hex Encoding/Decoding Helpers to prevent IIS path validation errors
+function stringToHex(str) {
+    let hex = '';
+    for (let i = 0; i < str.length; i++) {
+        hex += str.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+function hexToString(hex) {
+    if (!hex) return '';
+    let str = '';
+    for (let i = 0; i < hex.length; i += 2) {
+        str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    return str;
 }
 
