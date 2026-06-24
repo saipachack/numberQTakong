@@ -155,7 +155,9 @@ function loadStateFromServer() {
                 if (!val) return;
                 let data;
                 try {
-                    if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
+                    if (typeof val === 'string' && /^[0-9a-z]{7,}$/.test(val)) {
+                        data = decompressCompactState(val);
+                    } else if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
                         const arr = val.split(',').map(Number);
                         data = decompressState(arr);
                     } else {
@@ -241,8 +243,7 @@ function saveStateToStorage() {
     
     if (isCloudSyncActive && cloudRoomId) {
         const trimmedState = getTrimmedState();
-        const compressed = compressState(trimmedState);
-        const valueToSend = JSON.stringify(compressed);
+        const valueToSend = compressCompactState(trimmedState);
         // Write to keyvalue.immanuel.co
         fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
             method: 'POST',
@@ -805,7 +806,10 @@ function connectToCloudRoomById(targetRoomId) {
             let data;
             let isValid = false;
             try {
-                if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
+                if (typeof val === 'string' && /^[0-9a-z]{7,}$/.test(val)) {
+                    data = decompressCompactState(val);
+                    if (validateState(data)) isValid = true;
+                } else if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
                     const arr = val.split(',').map(Number);
                     data = decompressState(arr);
                     if (validateState(data)) isValid = true;
@@ -1136,6 +1140,59 @@ function safeDecode(str) {
         .replace(/_K/g, ',')
         .replace(/_C/g, ':')
         .replace(/_U/g, '_');
+}
+
+// Base-36 utilities for ultra-compact URL segment transfer (safely fits 50+ tickets under IIS 260-char limit)
+function toBase36(num, length) {
+    let str = parseInt(num || 0, 10).toString(36);
+    return str.padStart(length, '0');
+}
+
+function fromBase36(str) {
+    if (!str) return 0;
+    return parseInt(str, 36) || 0;
+}
+
+function compressCompactState(fullState) {
+    const arr = compressState(fullState);
+    if (!arr || arr.length < 4) return '';
+    
+    let str = '';
+    str += toBase36(arr[0], 2); // ticketCounter (0-1295)
+    str += toBase36(arr[1], 1); // avgWaitTimePerPerson (0-35)
+    str += toBase36(arr[2], 2); // calling ticket number
+    str += toBase36(arr[3], 2); // calling ticket check-in time
+    
+    for (let i = 4; i < arr.length; i += 2) {
+        str += toBase36(arr[i], 2);   // waiting ticket number
+        str += toBase36(arr[i+1], 2); // waiting ticket time
+    }
+    return str;
+}
+
+function decompressCompactState(str) {
+    if (!str || typeof str !== 'string') return null;
+    if (!/^[0-9a-z]+$/.test(str) || str.length < 7) return null;
+    
+    const ticketCounter = fromBase36(str.substring(0, 2));
+    const avgWaitTimePerPerson = fromBase36(str.substring(2, 3));
+    const callingNum = fromBase36(str.substring(3, 5));
+    const callingTime = fromBase36(str.substring(5, 7));
+    
+    const arr = [
+        ticketCounter,
+        avgWaitTimePerPerson,
+        callingNum,
+        callingTime
+    ];
+    
+    for (let i = 7; i + 4 <= str.length; i += 4) {
+        const numVal = fromBase36(str.substring(i, i + 2));
+        const timeVal = fromBase36(str.substring(i + 2, i + 4));
+        arr.push(numVal, timeVal);
+    }
+    
+    return decompressState(arr);
 }
 
 // Highly compact representation for cloud synchronization (keeps segment size < 260 characters)
