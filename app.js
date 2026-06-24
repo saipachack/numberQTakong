@@ -26,21 +26,41 @@ let pollIntervalId = null;
 let presenceIntervalId = null;
 
 function setupIntervals() {
+    if (document.hidden) return; // Don't setup intervals if page is in background
+    
     if (pollIntervalId) clearInterval(pollIntervalId);
     if (presenceIntervalId) clearInterval(presenceIntervalId);
     
     const role = getActiveRole();
-    let pollTime = 1500;      // 1.5s for Operator/TV
-    let presenceTime = 5000;  // 5s for Operator/TV
+    let pollTime = 1500;      // 1.5s for TV (needs to be fast, plugged in)
+    let presenceTime = 30000; // 30s for TV
     
     if (role === 'Kiosk') {
-        pollTime = 12000;       // 12s for Kiosk (reduces battery drain massively)
-        presenceTime = 25000;   // 25s for Kiosk
+        pollTime = 12000;       // 12s for Kiosk (saves battery)
+        presenceTime = 45000;   // 45s for Kiosk
+    } else if (role === 'Operator') {
+        pollTime = 3500;        // 3.5s for Operator (saves battery on mobile)
+        presenceTime = 45000;   // 45s for Operator
     }
     
     pollIntervalId = setInterval(loadStateFromServer, pollTime);
     presenceIntervalId = setInterval(syncDevicePresence, presenceTime);
 }
+
+// Page visibility change listener to pause polling in background
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        if (pollIntervalId) clearInterval(pollIntervalId);
+        if (presenceIntervalId) clearInterval(presenceIntervalId);
+        pollIntervalId = null;
+        presenceIntervalId = null;
+    } else {
+        // Resume polling and fetch instantly
+        loadStateFromServer();
+        syncDevicePresence();
+        setupIntervals();
+    }
+});
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
