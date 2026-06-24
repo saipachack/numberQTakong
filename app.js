@@ -116,23 +116,41 @@ function loadStateFromServer() {
                 if (!val) return;
                 let data;
                 try {
-                    data = JSON.parse(hexToString(val));
+                    const decoded = safeDecode(val);
+                    const parsed = JSON.parse(decoded);
+                    if (parsed && (parsed.q || parsed.queue)) {
+                        data = parsed.q ? decompressState(parsed) : parsed;
+                    }
                 } catch (e) {
                     try {
-                        data = JSON.parse(decodeURIComponent(val));
+                        data = JSON.parse(hexToString(val));
                     } catch (e2) {
                         try {
-                            data = JSON.parse(val);
+                            data = JSON.parse(decodeURIComponent(val));
                         } catch (e3) {
-                            return;
+                            try {
+                                data = JSON.parse(val);
+                            } catch (e4) {
+                                return;
+                            }
                         }
                     }
                 }
                 if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
-                    if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
-                        state = data;
-                        localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
-                        renderAll();
+                    if (validateState(data)) {
+                        const serverWaitingAndCalling = data.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
+                        const localCompletedOrSkipped = state.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
+                        const mergedQueue = [...serverWaitingAndCalling, ...localCompletedOrSkipped];
+                        const mergedState = {
+                            queue: mergedQueue,
+                            ticketCounter: Math.max(state.ticketCounter, data.ticketCounter),
+                            avgWaitTimePerPerson: data.avgWaitTimePerPerson || 5
+                        };
+                        if (JSON.stringify(state) !== JSON.stringify(mergedState)) {
+                            state = mergedState;
+                            localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                            renderAll();
+                        }
                     }
                 }
             })
@@ -170,7 +188,8 @@ function saveStateToStorage() {
     
     if (isCloudSyncActive && cloudRoomId) {
         const trimmedState = getTrimmedState();
-        const valueToSend = stringToHex(JSON.stringify(trimmedState));
+        const compressed = compressState(trimmedState);
+        const valueToSend = safeEncode(JSON.stringify(compressed));
         // Write to keyvalue.immanuel.co
         fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
             method: 'POST',
@@ -582,15 +601,20 @@ function renderAll() {
     }
     
     // General Stats on TV View
-    document.getElementById('stat-total-today').textContent = state.queue.length;
+    const totalTodayVal = isCloudSyncActive ? (state.ticketCounter - 1) : state.queue.length;
+    const completedCountVal = isCloudSyncActive ? Math.max(0, state.ticketCounter - 1 - waitingList.length - (callingItem ? 1 : 0)) : state.queue.filter(i => i.status === 'completed').length;
+    
+    document.getElementById('stat-total-today').textContent = totalTodayVal;
     document.getElementById('stat-waiting-now').textContent = waitingList.length;
     document.getElementById('stat-avg-wait').textContent = `${waitTime} ນາທີ`;
-    document.getElementById('stat-completed-count').textContent = state.queue.filter(i => i.status === 'completed').length;
+    document.getElementById('stat-completed-count').textContent = completedCountVal;
     
     // --- 2. Operator View Rendering ---
     document.getElementById('op-wait-total').textContent = `${waitingList.length} ຄິວ`;
     document.getElementById('op-current-ticket').textContent = callingItem ? callingItem.number : '- - -';
-    document.getElementById('op-completed-total').textContent = `${state.queue.filter(i => i.status === 'completed').length} ຄິວ`;
+    
+    const opCompletedCountVal = isCloudSyncActive ? Math.max(0, state.ticketCounter - 1 - waitingList.length - (callingItem ? 1 : 0)) : state.queue.filter(i => i.status === 'completed').length;
+    document.getElementById('op-completed-total').textContent = `${opCompletedCountVal} ຄິວ`;
     
     // Active Called Ticket info in Operator panel
     const opActiveNum = document.getElementById('op-active-call-num');
@@ -728,17 +752,28 @@ function connectToCloudRoomById(targetRoomId) {
             let data;
             let isValid = false;
             try {
-                data = JSON.parse(hexToString(val));
-                if (validateState(data)) isValid = true;
-            } catch (e) {
-                try {
-                    data = JSON.parse(decodeURIComponent(val));
+                const decoded = safeDecode(val);
+                const parsed = JSON.parse(decoded);
+                if (parsed && (parsed.q || parsed.queue)) {
+                    data = parsed.q ? decompressState(parsed) : parsed;
                     if (validateState(data)) isValid = true;
-                } catch (e2) {
+                }
+            } catch (e) {}
+            
+            if (!isValid) {
+                try {
+                    data = JSON.parse(hexToString(val));
+                    if (validateState(data)) isValid = true;
+                } catch (e) {
                     try {
-                        data = JSON.parse(val);
+                        data = JSON.parse(decodeURIComponent(val));
                         if (validateState(data)) isValid = true;
-                    } catch (e3) {}
+                    } catch (e2) {
+                        try {
+                            data = JSON.parse(val);
+                            if (validateState(data)) isValid = true;
+                        } catch (e3) {}
+                    }
                 }
             }
             
@@ -748,7 +783,14 @@ function connectToCloudRoomById(targetRoomId) {
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
-                state = data;
+                const serverWaitingAndCalling = data.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
+                const localCompletedOrSkipped = state.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
+                const mergedQueue = [...serverWaitingAndCalling, ...localCompletedOrSkipped];
+                state = {
+                    queue: mergedQueue,
+                    ticketCounter: Math.max(state.ticketCounter, data.ticketCounter),
+                    avgWaitTimePerPerson: data.avgWaitTimePerPerson || 5
+                };
                 localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
                 
                 updateCloudUI();
@@ -883,14 +925,24 @@ function syncDevicePresence() {
             let presenceMap = {};
             if (val) {
                 try {
-                    presenceMap = JSON.parse(hexToString(val));
-                } catch(e) {
+                    const decoded = safeDecode(val);
+                    const parsed = JSON.parse(decoded);
+                    if (Array.isArray(parsed)) {
+                        presenceMap = decompressPresence(parsed);
+                    } else {
+                        presenceMap = parsed;
+                    }
+                } catch (e) {
                     try {
-                        presenceMap = JSON.parse(decodeURIComponent(val));
+                        presenceMap = JSON.parse(hexToString(val));
                     } catch(e2) {
                         try {
-                            presenceMap = JSON.parse(val);
-                        } catch(e3) {}
+                            presenceMap = JSON.parse(decodeURIComponent(val));
+                        } catch(e3) {
+                            try {
+                                presenceMap = JSON.parse(val);
+                            } catch(e4) {}
+                        }
                     }
                 }
             }
@@ -917,7 +969,8 @@ function syncDevicePresence() {
             activeDevicesCount = count;
             updatePresenceUI(activeMap);
             
-            const valToSend = stringToHex(JSON.stringify(activeMap));
+            const compressed = compressPresence(activeMap);
+            const valToSend = safeEncode(JSON.stringify(compressed));
             fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${presenceKey}/${valToSend}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -977,6 +1030,177 @@ function updatePresenceUI(activeMap) {
     
     container.innerHTML = html;
     lucide.createIcons();
+}
+
+// Custom URL-safe encoding/decoding to prevent IIS path validation and segment length issues
+function safeEncode(str) {
+    if (!str) return '';
+    return str
+        .replace(/_/g, '_U')
+        .replace(/:/g, '_C')
+        .replace(/,/g, '_K')
+        .replace(/\{/g, '_L')
+        .replace(/\}/g, '_R')
+        .replace(/\[/g, '_A')
+        .replace(/\]/g, '_B')
+        .replace(/"/g, '_Q')
+        .replace(/\//g, '_S')
+        .replace(/\+/g, '_P')
+        .replace(/=/g, '_E');
+}
+
+function safeDecode(str) {
+    if (!str) return '';
+    return str
+        .replace(/_E/g, '=')
+        .replace(/_P/g, '+')
+        .replace(/_S/g, '/')
+        .replace(/_Q/g, '"')
+        .replace(/_B/g, ']')
+        .replace(/_A/g, '[')
+        .replace(/_R/g, '}')
+        .replace(/_L/g, '{')
+        .replace(/_K/g, ',')
+        .replace(/_C/g, ':')
+        .replace(/_U/g, '_');
+}
+
+// Highly compact representation for cloud synchronization (keeps segment size < 260 characters)
+function compressState(fullState) {
+    const compressed = {
+        q: [],  // flat array of waiting: [num1, time1, num2, time2, ...]
+        c: 0,   // calling ticket number (0 if none)
+        ct: 0,  // calling ticket check-in time (minutes since midnight)
+        tc: fullState.ticketCounter || 1,
+        wt: fullState.avgWaitTimePerPerson || 5
+    };
+    
+    if (fullState.queue && Array.isArray(fullState.queue)) {
+        const waitingTickets = fullState.queue.filter(item => item.status === 'waiting');
+        const callingTicket = fullState.queue.find(item => item.status === 'calling');
+        
+        if (callingTicket) {
+            const numMatch = callingTicket.number ? callingTicket.number.match(/\d+/) : null;
+            compressed.c = numMatch ? parseInt(numMatch[0], 10) : 0;
+            compressed.ct = timeToMinutes(callingTicket.timestamp);
+        }
+        
+        waitingTickets.forEach(item => {
+            const numMatch = item.number ? item.number.match(/\d+/) : null;
+            const numVal = numMatch ? parseInt(numMatch[0], 10) : 0;
+            const timeVal = timeToMinutes(item.timestamp);
+            compressed.q.push(numVal, timeVal);
+        });
+    }
+    return compressed;
+}
+
+function decompressState(comp) {
+    if (!comp) return null;
+    
+    const full = {
+        queue: [],
+        ticketCounter: comp.tc || 1,
+        avgWaitTimePerPerson: comp.wt || 5
+    };
+    
+    function minutesToTime(mins) {
+        if (!mins) {
+            const now = new Date();
+            return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+        const h = Math.floor(mins / 60) % 24;
+        const m = mins % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    
+    if (comp.c) {
+        const formattedNumber = `Q-${String(comp.c).padStart(3, '0')}`;
+        full.queue.push({
+            id: 'q_call_' + comp.c,
+            number: formattedNumber,
+            status: 'calling',
+            timestamp: minutesToTime(comp.ct),
+            completedAt: '',
+            rawTime: Date.now()
+        });
+    }
+    
+    if (comp.q && Array.isArray(comp.q)) {
+        for (let i = 0; i < comp.q.length; i += 2) {
+            const numVal = comp.q[i];
+            const timeVal = comp.q[i+1];
+            if (numVal === undefined) break;
+            
+            const formattedNumber = `Q-${String(numVal).padStart(3, '0')}`;
+            full.queue.push({
+                id: 'q_' + numVal,
+                number: formattedNumber,
+                status: 'waiting',
+                timestamp: minutesToTime(timeVal),
+                completedAt: '',
+                rawTime: Date.now() + i
+            });
+        }
+    }
+    
+    return full;
+}
+
+function timeToMinutes(timestampStr) {
+    if (!timestampStr) {
+        const now = new Date();
+        return now.getHours() * 60 + now.getMinutes();
+    }
+    const parts = timestampStr.split(':');
+    if (parts.length >= 2) {
+        return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    }
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+}
+
+function compressPresence(presenceMap) {
+    const arr = [];
+    const now = Date.now();
+    for (const devId in presenceMap) {
+        if (now - presenceMap[devId].lastSeen < 15000) {
+            let roleCode = 'C';
+            if (presenceMap[devId].role === 'Operator') roleCode = 'O';
+            else if (presenceMap[devId].role === 'TV') roleCode = 'T';
+            else if (presenceMap[devId].role === 'Kiosk') roleCode = 'K';
+            
+            const cleanId = devId.replace('dev_', '');
+            arr.push([
+                cleanId,
+                roleCode,
+                Math.floor(presenceMap[devId].lastSeen / 1000)
+            ]);
+        }
+    }
+    return arr;
+}
+
+function decompressPresence(arr) {
+    const presenceMap = {};
+    if (!arr || !Array.isArray(arr)) return presenceMap;
+    
+    arr.forEach(item => {
+        const cleanId = item[0];
+        const roleCode = item[1];
+        const lastSeenSec = item[2];
+        
+        let role = 'Client';
+        if (roleCode === 'O') role = 'Operator';
+        else if (roleCode === 'T') role = 'TV';
+        else if (roleCode === 'K') role = 'Kiosk';
+        
+        presenceMap['dev_' + cleanId] = {
+            role: role,
+            lastSeen: lastSeenSec * 1000
+        };
+    });
+    return presenceMap;
 }
 
 // Hex Encoding/Decoding Helpers to prevent IIS path validation errors
