@@ -89,7 +89,16 @@ function loadStateFromServer() {
             })
             .then(val => {
                 if (!val) return;
-                const data = JSON.parse(val);
+                let data;
+                try {
+                    data = JSON.parse(decodeURIComponent(val));
+                } catch (e) {
+                    try {
+                        data = JSON.parse(val);
+                    } catch (e2) {
+                        return;
+                    }
+                }
                 if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
                     if (validateState(data) && JSON.stringify(state) !== JSON.stringify(data)) {
                         state = data;
@@ -685,7 +694,18 @@ function connectToCloudRoomById(targetRoomId) {
                 alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
                 return;
             }
-            const data = JSON.parse(val);
+            let data;
+            try {
+                data = JSON.parse(decodeURIComponent(val));
+            } catch (e) {
+                try {
+                    data = JSON.parse(val);
+                } catch (e2) {
+                    alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
+                    updateModalState();
+                    return;
+                }
+            }
             if (validateState(data)) {
                 cloudRoomId = targetRoomId;
                 isCloudSyncActive = true;
