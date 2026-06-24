@@ -61,7 +61,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Load/Save State
 function validateState(data) {
-    return data && Array.isArray(data.queue) && typeof data.ticketCounter === 'number';
+    if (data && Array.isArray(data.queue)) {
+        if (typeof data.ticketCounter !== 'number') {
+            let maxNum = 1;
+            data.queue.forEach(item => {
+                if (item && item.number) {
+                    const match = item.number.match(/\d+/);
+                    if (match) {
+                        const num = parseInt(match[0], 10);
+                        if (num >= maxNum) maxNum = num + 1;
+                    }
+                }
+            });
+            data.ticketCounter = maxNum;
+        }
+        if (typeof data.avgWaitTimePerPerson !== 'number') {
+            data.avgWaitTimePerPerson = 5;
+        }
+        return true;
+    }
+    return false;
 }
 
 function loadStateFromStorage() {
@@ -155,7 +174,8 @@ function saveStateToStorage() {
         // Write to keyvalue.immanuel.co
         fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
             method: 'POST',
-            body: ''
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=1'
         })
         .then(res => {
             if (!res.ok) throw new Error("Cloud write failed");
@@ -900,7 +920,8 @@ function syncDevicePresence() {
             const valToSend = stringToHex(JSON.stringify(activeMap));
             fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${presenceKey}/${valToSend}`, {
                 method: 'POST',
-                body: ''
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'data=1'
             }).catch(() => {});
         })
         .catch(() => {});
