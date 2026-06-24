@@ -1037,7 +1037,7 @@ function syncDevicePresence() {
             const activeMap = {};
             let count = 0;
             for (const devId in presenceMap) {
-                if (now - presenceMap[devId].lastSeen < 8000) {
+                if (Math.abs(now - presenceMap[devId].lastSeen) < 600000) {
                     activeMap[devId] = presenceMap[devId];
                     count++;
                 }
@@ -1158,26 +1158,26 @@ function compressCompactState(fullState) {
     if (!arr || arr.length < 4) return '';
     
     let str = '';
-    str += toBase36(arr[0], 2); // ticketCounter (0-1295)
-    str += toBase36(arr[1], 1); // avgWaitTimePerPerson (0-35)
-    str += toBase36(arr[2], 2); // calling ticket number
-    str += toBase36(arr[3], 2); // calling ticket check-in time
+    str += toBase36(arr[0], 2); // ticketCounter (0-1295) -> 2 chars
+    str += toBase36(arr[1], 1); // avgWaitTimePerPerson (0-35) -> 1 char
+    str += toBase36(arr[2], 2); // calling ticket number (0-1295) -> 2 chars
+    str += toBase36(arr[3], 3); // calling ticket check-in time (0-46655) -> 3 chars (for 0-1440 min)
     
     for (let i = 4; i < arr.length; i += 2) {
-        str += toBase36(arr[i], 2);   // waiting ticket number
-        str += toBase36(arr[i+1], 2); // waiting ticket time
+        str += toBase36(arr[i], 2);   // waiting ticket number -> 2 chars
+        str += toBase36(arr[i+1], 3); // waiting ticket time -> 3 chars
     }
     return str;
 }
 
 function decompressCompactState(str) {
     if (!str || typeof str !== 'string') return null;
-    if (!/^[0-9a-z]+$/.test(str) || str.length < 7) return null;
+    if (!/^[0-9a-z]+$/.test(str) || str.length < 8) return null;
     
     const ticketCounter = fromBase36(str.substring(0, 2));
     const avgWaitTimePerPerson = fromBase36(str.substring(2, 3));
     const callingNum = fromBase36(str.substring(3, 5));
-    const callingTime = fromBase36(str.substring(5, 7));
+    const callingTime = fromBase36(str.substring(5, 8));
     
     const arr = [
         ticketCounter,
@@ -1186,9 +1186,9 @@ function decompressCompactState(str) {
         callingTime
     ];
     
-    for (let i = 7; i + 4 <= str.length; i += 4) {
+    for (let i = 8; i + 5 <= str.length; i += 5) {
         const numVal = fromBase36(str.substring(i, i + 2));
-        const timeVal = fromBase36(str.substring(i + 2, i + 4));
+        const timeVal = fromBase36(str.substring(i + 2, i + 5));
         arr.push(numVal, timeVal);
     }
     
@@ -1336,7 +1336,7 @@ function compressPresence(presenceMap) {
     const arr = [];
     const now = Date.now();
     for (const devId in presenceMap) {
-        if (now - presenceMap[devId].lastSeen < 15000) {
+        if (Math.abs(now - presenceMap[devId].lastSeen) < 600000) {
             let roleCode = 'C';
             if (presenceMap[devId].role === 'Operator') roleCode = 'O';
             else if (presenceMap[devId].role === 'TV') roleCode = 'T';
