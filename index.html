@@ -43,7 +43,7 @@
             <div class="header-phone">
                 <i data-lucide="phone"></i> 020 9518 8888
             </div>
-            <div class="header-cloud-sync offline" id="header-cloud-indicator" onclick="promptCloudRoom()">
+            <div class="header-cloud-sync offline" id="header-cloud-indicator" onclick="openCloudModal()">
                 <i data-lucide="cloud-off"></i> <span>Offline</span>
             </div>
         </div>
@@ -238,29 +238,18 @@
                                         <span class="slider round"></span>
                                     </label>
                                 </div>
-                                <div class="setting-row toggle-row">
-                                    <span><i data-lucide="globe"></i> ແບ່ງປັນຄິວອອນລາຍ (Cloud Sync)</span>
-                                    <label class="switch">
-                                        <input type="checkbox" id="online-sync-toggle">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                                <div class="setting-row hidden" id="online-room-row">
-                                    <label for="online-room-id"><i data-lucide="key"></i> ID ຫ້ອງອອນລາຍ (Cloud Room ID):</label>
-                                    <div class="input-group" style="display: flex;">
-                                        <input type="text" id="online-room-id" class="form-select" style="font-family: var(--font-outfit); font-weight: 600; flex: 1;" readonly>
-                                        <button class="btn btn-secondary btn-sm" onclick="copyRoomID()" style="border-radius: 8px; margin-left: 5px; min-width: 44px;" title="ຄັດລອກ"><i data-lucide="copy"></i></button>
-                                    </div>
-                                    <p class="setting-help" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">ປ້ອນ ID ນີ້ (ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1) ໃສ່ໜ້າຈໍອື່ນເພື່ອຊິ້ງຂໍ້ມູນຮ່ວມກັນ</p>
-                                </div>
-                                <div class="setting-row" id="connect-room-row">
-                                    <label for="connect-room-id"><i data-lucide="link"></i> ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ (Join Room ID):</label>
-                                    <div class="input-group" style="display: flex;">
-                                        <input type="text" id="connect-room-id" class="form-select" placeholder="ປ້ອນ ID ຫ້ອງ (ຕົວຢ່າງ: 1, 2, 3, group1)..." style="font-family: var(--font-outfit); flex: 1;">
-                                        <button class="btn btn-primary btn-sm" onclick="connectToCloudRoom()" style="border-radius: 8px; margin-left: 5px; min-width: 80px;">ເຊື່ອມຕໍ່</button>
-                                    </div>
-                                    <p class="setting-help" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1 (ໃຊ້ ID ດຽວກັນກັບທຸກອຸປະກອນເພື່ອຊິ້ງຂໍ້ມູນ)</p>
-                                </div>
+                                 <div class="setting-row" style="margin-top: 15px;">
+                                     <label><i data-lucide="globe"></i> ລະບົບຊິ້ງຄິວອອນລາຍ (Cloud Sync):</label>
+                                     <div class="cloud-status-card glass-card" style="padding: 12px; margin-top: 5px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color);">
+                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                             <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted);">ສະຖານະ (Status):</span>
+                                             <span class="badge" id="op-cloud-badge" style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">Offline</span>
+                                         </div>
+                                         <button class="btn btn-secondary btn-sm" onclick="openCloudModal()" style="width: 100%; border-radius: 8px; font-weight: 600; padding: 8px; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                             <i data-lucide="globe"></i> ຕັ້ງຄ່າຫ້ອງອອນລາຍ (Set Room ID)
+                                         </button>
+                                     </div>
+                                 </div>
                                 <div class="setting-row button-row">
                                     <button class="btn btn-danger btn-sm" onclick="confirmResetQueue()">
                                         <i data-lucide="trash-2"></i> ລ້າງຂໍ້ມູນຄິວທັງໝົດ (Reset)
@@ -325,6 +314,54 @@
     <footer class="app-footer">
         <p>&copy; 2026 Takong Photobooth. Tel: 020 9518 8888. Designed with ❤️ for visual excellence.</p>
     </footer>
+
+    <!-- Cloud Sync Custom Modal -->
+    <div class="modal-overlay hidden" id="cloud-sync-modal">
+        <div class="modal-card glass-card">
+            <div class="modal-header">
+                <h3><i data-lucide="globe"></i> ເລືອກຫ້ອງເຊື່ອມຕໍ່ອອນລາຍ (Cloud Sync)</h3>
+                <button class="modal-close-btn" onclick="closeCloudModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">ເລືອກກຸ່ມດຽວກັນໃນທຸກອຸປະກອນ (Kiosk, TV, Operator) ເພື່ອຊິ້ງຂໍ້ມູນຄິວຖ່າຍຮູບຮ່ວມກັນ</p>
+                
+                <div class="quick-groups-grid">
+                    <button class="btn-group-select" onclick="selectQuickGroup('1')" id="btn-group-1">
+                        <span class="group-icon">⭐</span>
+                        <span class="group-name">ກຸ່ມ 1 (Group 1)</span>
+                    </button>
+                    <button class="btn-group-select" onclick="selectQuickGroup('2')" id="btn-group-2">
+                        <span class="group-icon">⭐</span>
+                        <span class="group-name">ກຸ່ມ 2 (Group 2)</span>
+                    </button>
+                    <button class="btn-group-select" onclick="selectQuickGroup('3')" id="btn-group-3">
+                        <span class="group-icon">⭐</span>
+                        <span class="group-name">ກຸ່ມ 3 (Group 3)</span>
+                    </button>
+                </div>
+                
+                <div class="custom-group-divider">
+                    <span>ຫຼື ປ້ອນຊື່ກຸ່ມອື່ນໆ (Or Custom Group ID)</span>
+                </div>
+                
+                <div class="custom-group-input-area">
+                    <div class="input-group" style="display: flex;">
+                        <input type="text" id="custom-group-input" class="form-select" placeholder="ປ້ອນຊື່ຫ້ອງ ຫຼື ກຸ່ມ..." style="font-family: var(--font-outfit); flex: 1;">
+                        <button class="btn btn-primary btn-sm" onclick="connectCustomGroup()" style="border-radius: 8px; margin-left: 5px; min-width: 80px;">ເຊື່ອມຕໍ່</button>
+                    </div>
+                </div>
+                
+                <div class="active-room-display hidden" id="modal-active-room-area">
+                    <div class="active-badge">
+                        <span class="pulse-indicator"></span> ຫ້ອງທີ່ເຊື່ອມຕໍ່ຢູ່: &nbsp;<strong id="modal-active-room-id">None</strong>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="disconnectCloudSync()" style="margin-top: 15px; width: 100%; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i data-lucide="cloud-off"></i> ຍົກເລີກການເຊື່ອມຕໍ່ອອນລາຍ (Disconnect)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

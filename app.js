@@ -45,13 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize Cloud Sync inputs & states
     updateCloudUI();
-    const syncToggle = document.getElementById('online-sync-toggle');
-    if (syncToggle) {
-        syncToggle.checked = isCloudSyncActive;
-        syncToggle.addEventListener('change', (e) => {
-            toggleOnlineSync(e.target.checked);
-        });
-    }
 
     // Default step initialization
     goToStep('welcome');
@@ -633,162 +626,45 @@ function switchOpTab(tab) {
 }
 
 // -------------------------------------------------------------
-// CLOUD SYNC HELPERS
+// CLOUD SYNC HELPERS (Custom Modal & Group Selector)
 // -------------------------------------------------------------
-function toggleOnlineSync(isActive) {
-    isCloudSyncActive = isActive;
-    localStorage.setItem('snap_glow_cloud_sync_active', isActive);
-    
-    if (isActive) {
-        if (!cloudRoomId) {
-            const customId = prompt("ກະລຸນາປ້ອນ ID ຫ້ອງອອນລາຍທີ່ຕ້ອງການຕັ້ງ (ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1):\n(ໃຊ້ ID ດຽວກັນນີ້ໃນທຸກໜ້າຈໍເພື່ອໃຫ້ຂໍ້ມູນຊິ້ງກັນ)");
-            if (!customId || !customId.trim()) {
-                isCloudSyncActive = false;
-                localStorage.setItem('snap_glow_cloud_sync_active', false);
-                const syncToggle = document.getElementById('online-sync-toggle');
-                if (syncToggle) syncToggle.checked = false;
-                updateCloudUI();
-                return;
-            }
-            cloudRoomId = customId.trim();
-            localStorage.setItem('snap_glow_cloud_room_id', cloudRoomId);
-            updateCloudUI();
-            lastWriteTime = Date.now();
-            saveStateToStorage(); // Push active state
-        } else {
-            updateCloudUI();
-            saveStateToStorage();
-        }
-    } else {
-        updateCloudUI();
+function openCloudModal() {
+    const modal = document.getElementById('cloud-sync-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        updateModalState();
     }
 }
 
-function updateCloudUI() {
-    const onlineRow = document.getElementById('online-room-row');
-    const roomInput = document.getElementById('online-room-id');
-    const indicator = document.getElementById('header-cloud-indicator');
-    
-    if (isCloudSyncActive && cloudRoomId) {
-        if (onlineRow) onlineRow.classList.remove('hidden');
-        if (roomInput) roomInput.value = cloudRoomId;
-        if (indicator) {
-            indicator.className = "header-cloud-sync online";
-            // Show full Room ID in header if it is reasonably short
-            const displayId = cloudRoomId.length > 15 ? cloudRoomId.slice(0, 12) + "..." : cloudRoomId;
-            indicator.innerHTML = `<i data-lucide="cloud"></i> <span>Online: ${displayId}</span>`;
-        }
-    } else {
-        if (onlineRow) onlineRow.classList.add('hidden');
-        if (indicator) {
-            indicator.className = "header-cloud-sync offline";
-            indicator.innerHTML = `<i data-lucide="cloud-off"></i> <span>Offline</span>`;
-        }
-    }
-    lucide.createIcons();
-}
-
-function copyRoomID() {
-    if (cloudRoomId) {
-        navigator.clipboard.writeText(cloudRoomId)
-            .then(() => alert("ຄັດລອກ Cloud Room ID ສຳເລັດແລ້ວ!"))
-            .catch(err => console.error("Clipboard write error:", err));
+function closeCloudModal() {
+    const modal = document.getElementById('cloud-sync-modal');
+    if (modal) {
+        modal.classList.add('hidden');
     }
 }
 
-function connectToCloudRoom() {
-    const inputVal = document.getElementById('connect-room-id').value.trim();
-    if (!inputVal) {
+function selectQuickGroup(groupNumber) {
+    const targetId = 'group' + groupNumber;
+    connectToCloudRoomById(targetId);
+}
+
+function connectCustomGroup() {
+    const val = document.getElementById('custom-group-input').value.trim();
+    if (!val) {
         alert("ກະລຸນາປ້ອນ Room ID ທີ່ຕ້ອງການເຊື່ອມຕໍ່");
         return;
     }
-    
-    if (confirm("ຕ້ອງການເຊື່ອມຕໍ່ຫ້ອງນີ້? ຂໍ້ມູນຄິວປັດຈຸບັນໃນເຄື່ອງນີ້ຈະຖືກແທນທີ່ດ້ວຍຂໍ້ມູນອອນລາຍ.")) {
-        // Fetch new room state to verify it works
-        fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${inputVal}?t=${Date.now()}`)
-            .then(res => {
-                if (!res.ok) throw new Error("Invalid room ID");
-                return res.json();
-            })
-            .then(val => {
-                if (!val) {
-                    // Room is empty or new. Auto-initialize with local queue state so it's super easy to sync.
-                    cloudRoomId = inputVal;
-                    isCloudSyncActive = true;
-                    localStorage.setItem('snap_glow_cloud_room_id', inputVal);
-                    localStorage.setItem('snap_glow_cloud_sync_active', true);
-                    
-                    document.getElementById('connect-room-id').value = '';
-                    const syncToggle = document.getElementById('online-sync-toggle');
-                    if (syncToggle) syncToggle.checked = true;
-                    
-                    updateCloudUI();
-                    saveStateToStorage(); // Pushes active state to the newly created room ID
-                    renderAll();
-                    alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${inputVal}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
-                    return;
-                }
-                const data = JSON.parse(val);
-                if (validateState(data)) {
-                    cloudRoomId = inputVal;
-                    isCloudSyncActive = true;
-                    localStorage.setItem('snap_glow_cloud_room_id', inputVal);
-                    localStorage.setItem('snap_glow_cloud_sync_active', true);
-                    
-                    // Clear input
-                    document.getElementById('connect-room-id').value = '';
-                    
-                    // Set toggle checked
-                    const syncToggle = document.getElementById('online-sync-toggle');
-                    if (syncToggle) syncToggle.checked = true;
-                    
-                    state = data;
-                    localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
-                    updateCloudUI();
-                    renderAll();
-                    alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
-                } else {
-                    alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
-                }
-            })
-            .catch(err => {
-                // If network/fetch fails, fall back to initializing under this ID
-                cloudRoomId = inputVal;
-                isCloudSyncActive = true;
-                localStorage.setItem('snap_glow_cloud_room_id', inputVal);
-                localStorage.setItem('snap_glow_cloud_sync_active', true);
-                
-                document.getElementById('connect-room-id').value = '';
-                const syncToggle = document.getElementById('online-sync-toggle');
-                if (syncToggle) syncToggle.checked = true;
-                
-                updateCloudUI();
-                saveStateToStorage();
-                renderAll();
-                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${inputVal}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
-            });
-    }
+    connectToCloudRoomById(val);
 }
 
-function promptCloudRoom() {
-    const currentStatus = isCloudSyncActive ? `ເຊື່ອມຕໍ່ຢູ່ໃນຫ້ອງ ID: ${cloudRoomId}\n\n` : '';
-    const inputVal = prompt(`${currentStatus}ປ້ອນ ID ຫ້ອງອອນລາຍ (ຕົວຢ່າງ: 1, 2, 3 ຫຼື group1):\n(ປ້ອນຄ່າວ່າງເພື່ອຍົກເລີກອອນລາຍ)`);
+function connectToCloudRoomById(targetRoomId) {
+    if (!targetRoomId) return;
     
-    if (inputVal === null) return; // cancel click
+    // Show user a quick visual loading
+    const activeIdText = document.getElementById('modal-active-room-id');
+    if (activeIdText) activeIdText.textContent = "ກຳລັງເຊື່ອມຕໍ່...";
     
-    if (inputVal.trim() === '') {
-        // Turn off cloud sync
-        isCloudSyncActive = false;
-        localStorage.setItem('snap_glow_cloud_sync_active', false);
-        const syncToggle = document.getElementById('online-sync-toggle');
-        if (syncToggle) syncToggle.checked = false;
-        updateCloudUI();
-        renderAll();
-        alert("ຍົກເລີກການຊິ້ງອອນລາຍແລ້ວ. ລະບົບຈະກັບມາໃຊ້ Local Network.");
-        return;
-    }
-    
-    const targetRoomId = inputVal.trim();
+    // Fetch state from keyvalue.immanuel.co
     fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${targetRoomId}?t=${Date.now()}`)
         .then(res => {
             if (!res.ok) throw new Error("Invalid ID");
@@ -796,18 +672,16 @@ function promptCloudRoom() {
         })
         .then(val => {
             if (!val) {
-                // Room is empty or new. Auto-initialize with local queue state so it's super easy to sync.
+                // Room is empty or new. Initialize it with current local state!
                 cloudRoomId = targetRoomId;
                 isCloudSyncActive = true;
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
-                const syncToggle = document.getElementById('online-sync-toggle');
-                if (syncToggle) syncToggle.checked = true;
-                
                 updateCloudUI();
                 saveStateToStorage(); // Pushes active state to the newly created room ID
                 renderAll();
+                updateModalState();
                 alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
                 return;
             }
@@ -818,32 +692,99 @@ function promptCloudRoom() {
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
-                const syncToggle = document.getElementById('online-sync-toggle');
-                if (syncToggle) syncToggle.checked = true;
-                
                 state = data;
                 localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+                
                 updateCloudUI();
                 renderAll();
-                alert("ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ!");
+                updateModalState();
+                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ "${targetRoomId}" ສຳເລັດແລ້ວ!`);
             } else {
                 alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
+                updateModalState();
             }
         })
         .catch(err => {
-            // Fallback for network error / key not found
+            // Fallback for network error / key not found. Initialize new room.
             cloudRoomId = targetRoomId;
             isCloudSyncActive = true;
             localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
             localStorage.setItem('snap_glow_cloud_sync_active', true);
             
-            const syncToggle = document.getElementById('online-sync-toggle');
-            if (syncToggle) syncToggle.checked = true;
-            
             updateCloudUI();
             saveStateToStorage();
             renderAll();
+            updateModalState();
             alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
         });
+}
+
+function disconnectCloudSync() {
+    isCloudSyncActive = false;
+    localStorage.setItem('snap_glow_cloud_sync_active', false);
+    updateCloudUI();
+    renderAll();
+    updateModalState();
+    alert("ຍົກເລີກການເຊື່ອມຕໍ່ອອນລາຍແລ້ວ. ລະບົບຈະກັບມາໃຊ້ Local Network.");
+}
+
+function updateCloudUI() {
+    const indicator = document.getElementById('header-cloud-indicator');
+    const badge = document.getElementById('op-cloud-badge');
+    
+    if (isCloudSyncActive && cloudRoomId) {
+        if (indicator) {
+            indicator.className = "header-cloud-sync online";
+            const displayId = cloudRoomId.length > 15 ? cloudRoomId.slice(0, 12) + "..." : cloudRoomId;
+            indicator.innerHTML = `<i data-lucide="cloud"></i> <span>Online: ${displayId}</span>`;
+        }
+        if (badge) {
+            badge.textContent = `Online: ${cloudRoomId}`;
+            badge.style.background = "rgba(16, 185, 129, 0.15)";
+            badge.style.color = "#10b981";
+        }
+    } else {
+        if (indicator) {
+            indicator.className = "header-cloud-sync offline";
+            indicator.innerHTML = `<i data-lucide="cloud-off"></i> <span>Offline</span>`;
+        }
+        if (badge) {
+            badge.textContent = "Offline";
+            badge.style.background = "rgba(239, 68, 68, 0.15)";
+            badge.style.color = "#ef4444";
+        }
+    }
+    lucide.createIcons();
+}
+
+function updateModalState() {
+    // Reset group buttons
+    document.querySelectorAll('.btn-group-select').forEach(btn => btn.classList.remove('active'));
+    
+    const activeArea = document.getElementById('modal-active-room-area');
+    const activeId = document.getElementById('modal-active-room-id');
+    const customInput = document.getElementById('custom-group-input');
+    
+    if (isCloudSyncActive && cloudRoomId) {
+        if (activeArea) activeArea.classList.remove('hidden');
+        if (activeId) activeId.textContent = cloudRoomId;
+        
+        // Highlight corresponding group button if group1/2/3
+        if (cloudRoomId === 'group1') {
+            const btn = document.getElementById('btn-group-1');
+            if (btn) btn.classList.add('active');
+        } else if (cloudRoomId === 'group2') {
+            const btn = document.getElementById('btn-group-2');
+            if (btn) btn.classList.add('active');
+        } else if (cloudRoomId === 'group3') {
+            const btn = document.getElementById('btn-group-3');
+            if (btn) btn.classList.add('active');
+        } else {
+            if (customInput) customInput.value = cloudRoomId;
+        }
+    } else {
+        if (activeArea) activeArea.classList.add('hidden');
+        if (customInput) customInput.value = '';
+    }
 }
 

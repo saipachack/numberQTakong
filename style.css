@@ -1650,3 +1650,205 @@ input:checked + .slider:before {
     }
 }
 
+/* ==========================================
+   CLOUD SYNC CUSTOM MODAL & GROUP SELECTOR
+   ========================================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.hidden {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    width: 90%;
+    max-width: 480px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(158, 124, 59, 0.15);
+    animation: modal-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modal-pop {
+    from {
+        transform: scale(0.9) translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(197, 160, 89, 0.15);
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.modal-header h3 {
+    font-family: var(--font-playfair);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--neon-gold-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.75rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: var(--transition-smooth);
+}
+
+.modal-close-btn:hover {
+    color: var(--neon-gold-dark);
+    transform: scale(1.1);
+}
+
+.modal-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.quick-groups-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 1.5rem;
+}
+
+.btn-group-select {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(197, 160, 89, 0.3);
+    border-radius: 16px;
+    padding: 1.25rem 0.5rem;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: var(--transition-smooth);
+}
+
+.btn-group-select .group-icon {
+    font-size: 1.5rem;
+}
+
+.btn-group-select .group-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-main);
+    text-align: center;
+}
+
+.btn-group-select:hover {
+    background: rgba(197, 160, 89, 0.08);
+    border-color: var(--neon-gold);
+    transform: translateY(-2px);
+}
+
+.btn-group-select.active {
+    background: var(--gradient-primary);
+    border-color: transparent;
+    box-shadow: 0 4px 15px rgba(158, 124, 59, 0.25);
+}
+
+.btn-group-select.active .group-name {
+    color: white !important;
+}
+
+.btn-group-select.active .group-icon {
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.custom-group-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin: 1.5rem 0 1rem 0;
+}
+
+.custom-group-divider::before,
+.custom-group-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(197, 160, 89, 0.15);
+}
+
+.custom-group-divider span {
+    padding: 0 10px;
+}
+
+.custom-group-input-area {
+    margin-bottom: 1.5rem;
+}
+
+.active-room-display {
+    border-top: 1px solid rgba(197, 160, 89, 0.15);
+    padding-top: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+.active-room-display.hidden {
+    display: none !important;
+}
+
+.active-badge {
+    background: rgba(16, 185, 129, 0.08);
+    color: var(--neon-green);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.active-badge strong {
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-family: var(--font-outfit);
+}
+
+
