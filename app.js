@@ -59,9 +59,48 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
 });
 
+// Helper to clean duplicate tickets from a queue, keeping the one with higher status precedence
+function cleanDuplicateTickets(queue) {
+    if (!Array.isArray(queue)) return [];
+    const uniqueMap = new Map();
+    queue.forEach(item => {
+        if (!item || !item.number) return;
+        const existing = uniqueMap.get(item.number);
+        if (!existing) {
+            uniqueMap.set(item.number, item);
+        } else {
+            const statusPrecedence = { 'completed': 3, 'skipped': 3, 'calling': 2, 'waiting': 1 };
+            const existingPrec = statusPrecedence[existing.status] || 0;
+            const itemPrec = statusPrecedence[item.status] || 0;
+            if (itemPrec > existingPrec) {
+                uniqueMap.set(item.number, item);
+            } else if (itemPrec === existingPrec) {
+                if (item.completedAt && !existing.completedAt) {
+                    uniqueMap.set(item.number, item);
+                }
+            }
+        }
+    });
+    return Array.from(uniqueMap.values());
+}
+
+// Helper to merge server queue state and local queue state without duplicates
+function mergeQueues(serverQueue, localQueue) {
+    const serverWaitingAndCalling = (serverQueue || []).filter(item => item && (item.status === 'waiting' || item.status === 'calling'));
+    const localCompletedOrSkipped = (localQueue || []).filter(item => item && (item.status === 'completed' || item.status === 'skipped'));
+    
+    // Avoid duplicates: if a ticket number is already completed/skipped locally, exclude it from server waiting/calling
+    const completedNumbers = new Set(localCompletedOrSkipped.map(item => item.number));
+    const filteredServer = serverWaitingAndCalling.filter(item => !completedNumbers.has(item.number));
+    
+    const combined = [...filteredServer, ...localCompletedOrSkipped];
+    return cleanDuplicateTickets(combined);
+}
+
 // Load/Save State
 function validateState(data) {
     if (data && Array.isArray(data.queue)) {
+        data.queue = cleanDuplicateTickets(data.queue);
         if (typeof data.ticketCounter !== 'number') {
             let maxNum = 1;
             data.queue.forEach(item => {
@@ -154,9 +193,7 @@ function loadStateFromServer() {
                 }
                 if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
                     if (validateState(data)) {
-                        const serverWaitingAndCalling = data.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
-                        const localCompletedOrSkipped = state.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
-                        const mergedQueue = [...serverWaitingAndCalling, ...localCompletedOrSkipped];
+                        const mergedQueue = mergeQueues(data.queue, state.queue);
                         const mergedState = {
                             queue: mergedQueue,
                             ticketCounter: Math.max(state.ticketCounter, data.ticketCounter),
@@ -821,9 +858,7 @@ function connectToCloudRoomById(targetRoomId) {
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
-                const serverWaitingAndCalling = data.queue.filter(item => item.status === 'waiting' || item.status === 'calling');
-                const localCompletedOrSkipped = state.queue.filter(item => item.status === 'completed' || item.status === 'skipped');
-                const mergedQueue = [...serverWaitingAndCalling, ...localCompletedOrSkipped];
+                const mergedQueue = mergeQueues(data.queue, state.queue);
                 state = {
                     queue: mergedQueue,
                     ticketCounter: Math.max(state.ticketCounter, data.ticketCounter),
