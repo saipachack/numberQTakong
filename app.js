@@ -116,11 +116,16 @@ function loadStateFromServer() {
                 if (!val) return;
                 let data;
                 try {
-                    let parsed = JSON.parse(val);
-                    if (Array.isArray(parsed)) {
-                        data = decompressState(parsed);
-                    } else if (parsed && typeof parsed === 'object') {
-                        data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
+                    if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
+                        const arr = val.split(',').map(Number);
+                        data = decompressState(arr);
+                    } else {
+                        let parsed = JSON.parse(val);
+                        if (Array.isArray(parsed)) {
+                            data = decompressState(parsed);
+                        } else if (parsed && typeof parsed === 'object') {
+                            data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
+                        }
                     }
                 } catch (e) {
                     try {
@@ -763,13 +768,19 @@ function connectToCloudRoomById(targetRoomId) {
             let data;
             let isValid = false;
             try {
-                let parsed = JSON.parse(val);
-                if (Array.isArray(parsed)) {
-                    data = decompressState(parsed);
+                if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
+                    const arr = val.split(',').map(Number);
+                    data = decompressState(arr);
                     if (validateState(data)) isValid = true;
-                } else if (parsed && typeof parsed === 'object') {
-                    data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
-                    if (validateState(data)) isValid = true;
+                } else {
+                    let parsed = JSON.parse(val);
+                    if (Array.isArray(parsed)) {
+                        data = decompressState(parsed);
+                        if (validateState(data)) isValid = true;
+                    } else if (parsed && typeof parsed === 'object') {
+                        data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
+                        if (validateState(data)) isValid = true;
+                    }
                 }
             } catch (e) {}
             
