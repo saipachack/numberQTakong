@@ -21,6 +21,27 @@ let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 
 const myDeviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
 let activeDevicesCount = 1;
 
+// Interval trackers for dynamic polling
+let pollIntervalId = null;
+let presenceIntervalId = null;
+
+function setupIntervals() {
+    if (pollIntervalId) clearInterval(pollIntervalId);
+    if (presenceIntervalId) clearInterval(presenceIntervalId);
+    
+    const role = getActiveRole();
+    let pollTime = 1500;      // 1.5s for Operator/TV
+    let presenceTime = 5000;  // 5s for Operator/TV
+    
+    if (role === 'Kiosk') {
+        pollTime = 12000;       // 12s for Kiosk (reduces battery drain massively)
+        presenceTime = 25000;   // 25s for Kiosk
+    }
+    
+    pollIntervalId = setInterval(loadStateFromServer, pollTime);
+    presenceIntervalId = setInterval(syncDevicePresence, presenceTime);
+}
+
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
     // Initialize icons
@@ -29,12 +50,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load state from server initially, fallback to local storage
     loadStateFromServer();
     
-    // Poll server every 1.2s for real-time queue updates across other devices
-    setInterval(loadStateFromServer, 1200);
-
-    // Start device presence syncing
+    // Start dynamic polling intervals
+    setupIntervals();
+    
+    // Start initial presence sync
     syncDevicePresence();
-    setInterval(syncDevicePresence, 4000);
     // Set up local storage listener for multi-window sync
     window.addEventListener('storage', (e) => {
         if (e.key === 'snap_glow_queue_state') {
@@ -146,7 +166,7 @@ function loadStateFromServer() {
     if (isCloudSyncActive && cloudRoomId) {
         const fetchStartTime = Date.now();
         // Fetch from keyvalue.immanuel.co
-        fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${cloudRoomId}?t=${Date.now()}`)
+        return fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${cloudRoomId}?t=${Date.now()}`)
             .then(res => {
                 if (!res.ok) throw new Error("Cloud fetch failed");
                 return res.json();
@@ -215,7 +235,7 @@ function loadStateFromServer() {
     } else {
         const fetchStartTime = Date.now();
         // Fetch from local python server
-        fetch('/api/state')
+        return fetch('/api/state')
             .then(res => {
                 if (!res.ok) throw new Error("Server error");
                 return res.json();
@@ -341,7 +361,8 @@ function switchRole(role) {
         goToStep('welcome');
     }
     
-
+    // Adjust polling intervals for new role
+    setupIntervals();
     
     // Re-render because TV view or operator view might have changed
     renderAll();
@@ -351,37 +372,64 @@ function switchRole(role) {
 // KIOSK REGISTRATION LOGIC
 // -------------------------------------------------------------
 function submitTicket() {
-    const prefix = 'Q';
-    const formattedNumber = `${prefix}-${String(state.ticketCounter).padStart(3, '0')}`;
-    const timestampString = new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' });
+    const btn = document.querySelector('.btn-get-queue');
+    let originalHtml = '';
+    if (btn) {
+        btn.setAttribute('disabled', 'true');
+        originalHtml = btn.innerHTML;
+        btn.innerHTML = `<span style="display:inline-block; animation: spin 1s linear infinite; margin-right: 6px;">⏳</span> ກຳລັງໂຫຼດ...`;
+    }
     
-    const newQueueItem = {
-        id: 'q_' + Date.now(),
-        number: formattedNumber,
-        status: 'waiting',
-        timestamp: timestampString,
-        rawTime: Date.now()
-    };
+    // Fetch latest state immediately before printing to prevent counter collisions
+    const loadPromise = loadStateFromServer();
     
-    state.queue.push(newQueueItem);
-    state.ticketCounter += 1;
-    saveStateToStorage();
-    
-    // Calculate Wait Time
-    const waitingItems = state.queue.filter(item => item.status === 'waiting');
-    const waitTime = (waitingItems.length - 1) * state.avgWaitTimePerPerson;
-    
-    // Populate Ticket Details
-    document.getElementById('ticket-display-number').textContent = formattedNumber;
-    document.getElementById('ticket-display-wait').textContent = waitTime > 0 ? `${waitTime} ນາທີ` : "ພ້ອມຖ່າຍທັນທີ";
-    
-    // Play ticket generate beep
-    playTicketBeep();
-    
-    // Go to Ticket Step
-    goToStep('ticket');
-    
-
+    // Ensure we handle case where loadStateFromServer doesn't return a promise (fallback local mock or storage)
+    const resolvePromise = (loadPromise && typeof loadPromise.then === 'function') 
+        ? loadPromise 
+        : Promise.resolve();
+        
+    resolvePromise
+        .then(() => {
+            const prefix = 'Q';
+            const formattedNumber = `${prefix}-${String(state.ticketCounter).padStart(3, '0')}`;
+            const timestampString = new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' });
+            
+            const newQueueItem = {
+                id: 'q_' + Date.now(),
+                number: formattedNumber,
+                status: 'waiting',
+                timestamp: timestampString,
+                rawTime: Date.now()
+            };
+            
+            state.queue.push(newQueueItem);
+            state.ticketCounter += 1;
+            saveStateToStorage();
+            
+            // Calculate Wait Time
+            const waitingItems = state.queue.filter(item => item.status === 'waiting');
+            const waitTime = (waitingItems.length - 1) * state.avgWaitTimePerPerson;
+            
+            // Populate Ticket Details
+            document.getElementById('ticket-display-number').textContent = formattedNumber;
+            document.getElementById('ticket-display-wait').textContent = waitTime > 0 ? `${waitTime} ນາທີ` : "ພ້ອມຖ່າຍທັນທີ";
+            
+            // Play ticket generate beep
+            playTicketBeep();
+            
+            // Go to Ticket Step
+            goToStep('ticket');
+        })
+        .catch(err => {
+            console.error("Failed to sync queue counter prior to printing:", err);
+        })
+        .finally(() => {
+            if (btn) {
+                btn.removeAttribute('disabled');
+                btn.innerHTML = originalHtml;
+                lucide.createIcons();
+            }
+        });
 }
 
 function playTicketBeep() {
