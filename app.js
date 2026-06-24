@@ -17,6 +17,10 @@ let lastWriteTime = 0;
 let cloudRoomId = localStorage.getItem('snap_glow_cloud_room_id') || '';
 let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 'true';
 
+// Device Presence State
+const myDeviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
+let activeDevicesCount = 1;
+
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
     // Initialize icons
@@ -28,7 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Poll server every 1.2s for real-time queue updates across other devices
     setInterval(loadStateFromServer, 1200);
 
-    
+    // Start device presence syncing
+    syncDevicePresence();
+    setInterval(syncDevicePresence, 4000);
     // Set up local storage listener for multi-window sync
     window.addEventListener('storage', (e) => {
         if (e.key === 'snap_glow_queue_state') {
@@ -691,22 +697,23 @@ function connectToCloudRoomById(targetRoomId) {
                 saveStateToStorage(); // Pushes active state to the newly created room ID
                 renderAll();
                 updateModalState();
+                syncDevicePresence();
                 alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
                 return;
             }
             let data;
+            let isValid = false;
             try {
                 data = JSON.parse(decodeURIComponent(val));
+                if (validateState(data)) isValid = true;
             } catch (e) {
                 try {
                     data = JSON.parse(val);
-                } catch (e2) {
-                    alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
-                    updateModalState();
-                    return;
-                }
+                    if (validateState(data)) isValid = true;
+                } catch (e2) {}
             }
-            if (validateState(data)) {
+            
+            if (isValid) {
                 cloudRoomId = targetRoomId;
                 isCloudSyncActive = true;
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
@@ -718,10 +725,21 @@ function connectToCloudRoomById(targetRoomId) {
                 updateCloudUI();
                 renderAll();
                 updateModalState();
+                syncDevicePresence(); // Refresh presence instantly
                 alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ "${targetRoomId}" ສຳເລັດແລ້ວ!`);
             } else {
-                alert("ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ຂໍ້ມູນໃນຫ້ອງນີ້ບໍ່ຖືກຕ້ອງ.");
+                // Auto-initialize if data in room is invalid
+                cloudRoomId = targetRoomId;
+                isCloudSyncActive = true;
+                localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
+                localStorage.setItem('snap_glow_cloud_sync_active', true);
+                
+                updateCloudUI();
+                saveStateToStorage(); // Overwrites invalid data in the cloud with current local state
+                renderAll();
                 updateModalState();
+                syncDevicePresence(); // Refresh presence instantly
+                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ "${targetRoomId}" ສຳເລັດແລ້ວ! (ລີເຊັດຂໍ້ມູນຫ້ອງໃໝ່)`);
             }
         })
         .catch(err => {
@@ -806,5 +824,124 @@ function updateModalState() {
         if (activeArea) activeArea.classList.add('hidden');
         if (customInput) customInput.value = '';
     }
+}
+
+// -------------------------------------------------------------
+// DEVICE PRESENCE SYNCING
+// -------------------------------------------------------------
+function getActiveRole() {
+    if (document.getElementById('view-kiosk').classList.contains('active-view')) return 'Kiosk';
+    if (document.getElementById('view-tv').classList.contains('active-view')) return 'TV';
+    if (document.getElementById('view-operator').classList.contains('active-view')) return 'Operator';
+    return 'Client';
+}
+
+function syncDevicePresence() {
+    if (!isCloudSyncActive || !cloudRoomId) {
+        activeDevicesCount = 1;
+        updatePresenceUI();
+        return;
+    }
+    
+    const presenceKey = `${cloudRoomId}_presence`;
+    
+    fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${presenceKey}?t=${Date.now()}`)
+        .then(res => {
+            if (!res.ok) return null;
+            return res.json();
+        })
+        .then(val => {
+            let presenceMap = {};
+            if (val) {
+                try {
+                    presenceMap = JSON.parse(decodeURIComponent(val));
+                } catch(e) {
+                    try {
+                        presenceMap = JSON.parse(val);
+                    } catch(e2) {}
+                }
+            }
+            
+            if (typeof presenceMap !== 'object' || presenceMap === null) {
+                presenceMap = {};
+            }
+            
+            const now = Date.now();
+            presenceMap[myDeviceId] = {
+                role: getActiveRole(),
+                lastSeen: now
+            };
+            
+            const activeMap = {};
+            let count = 0;
+            for (const devId in presenceMap) {
+                if (now - presenceMap[devId].lastSeen < 8000) {
+                    activeMap[devId] = presenceMap[devId];
+                    count++;
+                }
+            }
+            
+            activeDevicesCount = count;
+            updatePresenceUI(activeMap);
+            
+            const valToSend = encodeURIComponent(JSON.stringify(activeMap));
+            fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${presenceKey}/${valToSend}`, {
+                method: 'POST',
+                body: ''
+            }).catch(() => {});
+        })
+        .catch(() => {});
+}
+
+function updatePresenceUI(activeMap) {
+    const indicator = document.getElementById('header-cloud-indicator');
+    const badge = document.getElementById('op-cloud-badge');
+    
+    if (indicator && isCloudSyncActive && cloudRoomId) {
+        const displayId = cloudRoomId.length > 15 ? cloudRoomId.slice(0, 12) + "..." : cloudRoomId;
+        indicator.innerHTML = `<i data-lucide="cloud"></i> <span>Online: ${displayId} (${activeDevicesCount} ອຸປະກອນ)</span>`;
+    }
+    
+    if (badge && isCloudSyncActive && cloudRoomId) {
+        badge.textContent = `Online: ${cloudRoomId} (${activeDevicesCount})`;
+    }
+    
+    const countSpan = document.getElementById('presence-count');
+    if (countSpan) countSpan.textContent = activeDevicesCount;
+    
+    const container = document.getElementById('presence-devices-container');
+    if (!container) return;
+    
+    if (!activeMap || Object.keys(activeMap).length === 0) {
+        container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 4px;">ກຳລັງໂຫຼດຂໍ້ມູນອຸປະກອນ...</div>`;
+        return;
+    }
+    
+    let html = '';
+    for (const devId in activeMap) {
+        const dev = activeMap[devId];
+        const isMe = devId === myDeviceId;
+        let iconName = 'monitor';
+        let roleName = dev.role;
+        
+        if (dev.role === 'Operator') iconName = 'sliders';
+        else if (dev.role === 'TV') iconName = 'tv';
+        else if (dev.role === 'Kiosk') iconName = 'monitor-play';
+        
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; padding: 6px 10px; background: rgba(255,255,255,0.4); border-radius: 8px; border: 1px solid rgba(197, 160, 89, 0.08);">
+                <span style="font-weight: 500; display: flex; align-items: center; gap: 6px; color: var(--text-main);">
+                    <i data-lucide="${iconName}" style="width: 14px; height: 14px; color: var(--neon-gold-dark);"></i> 
+                    ${roleName} ${isMe ? '(ອຸປະກອນນີ້)' : ''}
+                </span>
+                <span style="font-size: 0.75rem; color: var(--neon-green); font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                    <span style="width: 6px; height: 6px; background: var(--neon-green); border-radius: 50%; display: inline-block;"></span> Active
+                </span>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+    lucide.createIcons();
 }
 

@@ -352,10 +352,22 @@
                 </div>
                 
                 <div class="active-room-display hidden" id="modal-active-room-area">
-                    <div class="active-badge">
+                    <div class="active-badge" style="margin-bottom: 12px;">
                         <span class="pulse-indicator"></span> ຫ້ອງທີ່ເຊື່ອມຕໍ່ຢູ່: &nbsp;<strong id="modal-active-room-id">None</strong>
                     </div>
-                    <button class="btn btn-danger btn-sm" onclick="disconnectCloudSync()" style="margin-top: 15px; width: 100%; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    
+                    <!-- Active Devices List -->
+                    <div class="devices-presence-list" id="modal-devices-list" style="margin-top: 12px; margin-bottom: 15px; background: rgba(0,0,0,0.02); padding: 12px; border-radius: 16px; border: 1px dashed rgba(197,160,89,0.15);">
+                        <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>ອຸປະກອນໃນກຸ່ມ (Devices Online):</span>
+                            <span id="presence-count" style="color: var(--neon-gold-dark); background: rgba(197,160,89,0.1); padding: 2px 6px; border-radius: 20px; font-weight: 800;">1</span>
+                        </div>
+                        <div id="presence-devices-container" style="display: flex; flex-direction: column; gap: 6px;">
+                            <!-- Dynamic items -->
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-danger btn-sm" onclick="disconnectCloudSync()" style="width: 100%; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                         <i data-lucide="cloud-off"></i> ຍົກເລີກການເຊື່ອມຕໍ່ອອນລາຍ (Disconnect)
                     </button>
                 </div>
