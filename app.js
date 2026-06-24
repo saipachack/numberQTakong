@@ -116,22 +116,33 @@ function loadStateFromServer() {
                 if (!val) return;
                 let data;
                 try {
-                    const decoded = safeDecode(val);
-                    const parsed = JSON.parse(decoded);
-                    if (parsed && (parsed.q || parsed.queue)) {
-                        data = parsed.q ? decompressState(parsed) : parsed;
+                    let parsed = JSON.parse(val);
+                    if (Array.isArray(parsed)) {
+                        data = decompressState(parsed);
+                    } else if (parsed && typeof parsed === 'object') {
+                        data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
                     }
                 } catch (e) {
                     try {
-                        data = JSON.parse(hexToString(val));
+                        const decoded = safeDecode(val);
+                        const parsed = JSON.parse(decoded);
+                        if (Array.isArray(parsed)) {
+                            data = decompressState(parsed);
+                        } else if (parsed && typeof parsed === 'object') {
+                            data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
+                        }
                     } catch (e2) {
                         try {
-                            data = JSON.parse(decodeURIComponent(val));
+                            data = JSON.parse(hexToString(val));
                         } catch (e3) {
                             try {
-                                data = JSON.parse(val);
+                                data = JSON.parse(decodeURIComponent(val));
                             } catch (e4) {
-                                return;
+                                try {
+                                    data = JSON.parse(val);
+                                } catch (e5) {
+                                    return;
+                                }
                             }
                         }
                     }
@@ -189,7 +200,7 @@ function saveStateToStorage() {
     if (isCloudSyncActive && cloudRoomId) {
         const trimmedState = getTrimmedState();
         const compressed = compressState(trimmedState);
-        const valueToSend = safeEncode(JSON.stringify(compressed));
+        const valueToSend = JSON.stringify(compressed);
         // Write to keyvalue.immanuel.co
         fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
             method: 'POST',
@@ -752,13 +763,29 @@ function connectToCloudRoomById(targetRoomId) {
             let data;
             let isValid = false;
             try {
-                const decoded = safeDecode(val);
-                const parsed = JSON.parse(decoded);
-                if (parsed && (parsed.q || parsed.queue)) {
-                    data = parsed.q ? decompressState(parsed) : parsed;
+                let parsed = JSON.parse(val);
+                if (Array.isArray(parsed)) {
+                    data = decompressState(parsed);
+                    if (validateState(data)) isValid = true;
+                } else if (parsed && typeof parsed === 'object') {
+                    data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
                     if (validateState(data)) isValid = true;
                 }
             } catch (e) {}
+            
+            if (!isValid) {
+                try {
+                    const decoded = safeDecode(val);
+                    const parsed = JSON.parse(decoded);
+                    if (Array.isArray(parsed)) {
+                        data = decompressState(parsed);
+                        if (validateState(data)) isValid = true;
+                    } else if (parsed && typeof parsed === 'object') {
+                        data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
+                        if (validateState(data)) isValid = true;
+                    }
+                } catch (e) {}
+            }
             
             if (!isValid) {
                 try {
@@ -1067,13 +1094,12 @@ function safeDecode(str) {
 
 // Highly compact representation for cloud synchronization (keeps segment size < 260 characters)
 function compressState(fullState) {
-    const compressed = {
-        q: [],  // flat array of waiting: [num1, time1, num2, time2, ...]
-        c: 0,   // calling ticket number (0 if none)
-        ct: 0,  // calling ticket check-in time (minutes since midnight)
-        tc: fullState.ticketCounter || 1,
-        wt: fullState.avgWaitTimePerPerson || 5
-    };
+    const arr = [
+        fullState.ticketCounter || 1,
+        fullState.avgWaitTimePerPerson || 5,
+        0, // calling ticket number
+        0  // calling ticket check-in time
+    ];
     
     if (fullState.queue && Array.isArray(fullState.queue)) {
         const waitingTickets = fullState.queue.filter(item => item.status === 'waiting');
@@ -1081,27 +1107,39 @@ function compressState(fullState) {
         
         if (callingTicket) {
             const numMatch = callingTicket.number ? callingTicket.number.match(/\d+/) : null;
-            compressed.c = numMatch ? parseInt(numMatch[0], 10) : 0;
-            compressed.ct = timeToMinutes(callingTicket.timestamp);
+            arr[2] = numMatch ? parseInt(numMatch[0], 10) : 0;
+            arr[3] = timeToMinutes(callingTicket.timestamp);
         }
         
         waitingTickets.forEach(item => {
             const numMatch = item.number ? item.number.match(/\d+/) : null;
             const numVal = numMatch ? parseInt(numMatch[0], 10) : 0;
             const timeVal = timeToMinutes(item.timestamp);
-            compressed.q.push(numVal, timeVal);
+            arr.push(numVal, timeVal);
         });
     }
-    return compressed;
+    return arr;
 }
 
-function decompressState(comp) {
-    if (!comp) return null;
+function decompressState(arr) {
+    if (!arr || !Array.isArray(arr)) return null;
+    
+    // Check if it's the old compressed object format with 'q'
+    if (arr.q !== undefined) {
+        return decompressLegacyState(arr);
+    }
+    
+    // Check if it's the old array-of-arrays format
+    if (arr.length > 0 && Array.isArray(arr[0])) {
+        return decompressLegacyState({ q: arr });
+    }
+    
+    if (arr.length < 4) return null;
     
     const full = {
         queue: [],
-        ticketCounter: comp.tc || 1,
-        avgWaitTimePerPerson: comp.wt || 5
+        ticketCounter: parseInt(arr[0], 10) || 1,
+        avgWaitTimePerPerson: parseInt(arr[1], 10) || 5
     };
     
     function minutesToTime(mins) {
@@ -1114,60 +1152,68 @@ function decompressState(comp) {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     }
     
-    if (comp.q && Array.isArray(comp.q)) {
-        if (comp.q.length > 0 && Array.isArray(comp.q[0])) {
-            // Backward compatibility for old array-of-arrays format
-            full.queue = comp.q.map(arr => {
-                const numVal = arr[0];
-                const prefix = 'Q';
-                const formattedNumber = `${prefix}-${String(numVal).padStart(3, '0')}`;
-                
-                let status = 'waiting';
-                if (arr[2] === 'c') status = 'calling';
-                else if (arr[2] === 'd') status = 'completed';
-                else if (arr[2] === 's') status = 'skipped';
-                
-                return {
-                    id: 'q_' + (arr[4] || Date.now() + Math.random()),
-                    number: formattedNumber,
-                    status: status,
-                    timestamp: arr[1] || '',
-                    completedAt: arr[3] || '',
-                    rawTime: arr[4] || Date.now()
-                };
-            });
-        } else {
-            // New flat integer array format
-            if (comp.c) {
-                const formattedNumber = `Q-${String(comp.c).padStart(3, '0')}`;
-                full.queue.push({
-                    id: 'q_call_' + comp.c,
-                    number: formattedNumber,
-                    status: 'calling',
-                    timestamp: minutesToTime(comp.ct),
-                    completedAt: '',
-                    rawTime: Date.now()
-                });
-            }
-            
-            for (let i = 0; i < comp.q.length; i += 2) {
-                const numVal = comp.q[i];
-                const timeVal = comp.q[i+1];
-                if (numVal === undefined) break;
-                
-                const formattedNumber = `Q-${String(numVal).padStart(3, '0')}`;
-                full.queue.push({
-                    id: 'q_' + numVal,
-                    number: formattedNumber,
-                    status: 'waiting',
-                    timestamp: minutesToTime(timeVal),
-                    completedAt: '',
-                    rawTime: Date.now() + i
-                });
-            }
-        }
+    const callingNum = parseInt(arr[2], 10);
+    const callingTime = parseInt(arr[3], 10);
+    if (callingNum) {
+        const formattedNumber = `Q-${String(callingNum).padStart(3, '0')}`;
+        full.queue.push({
+            id: 'q_call_' + callingNum,
+            number: formattedNumber,
+            status: 'calling',
+            timestamp: minutesToTime(callingTime),
+            completedAt: '',
+            rawTime: Date.now()
+        });
     }
     
+    for (let i = 4; i < arr.length; i += 2) {
+        const numVal = parseInt(arr[i], 10);
+        const timeVal = parseInt(arr[i+1], 10);
+        if (numVal === undefined || isNaN(numVal)) break;
+        
+        const formattedNumber = `Q-${String(numVal).padStart(3, '0')}`;
+        full.queue.push({
+            id: 'q_' + numVal,
+            number: formattedNumber,
+            status: 'waiting',
+            timestamp: minutesToTime(timeVal),
+            completedAt: '',
+            rawTime: Date.now() + i
+        });
+    }
+    
+    return full;
+}
+
+function decompressLegacyState(comp) {
+    const full = {
+        queue: [],
+        ticketCounter: comp.tc || 1,
+        avgWaitTimePerPerson: comp.wt || 5
+    };
+    
+    const queueList = comp.q || comp.queue || [];
+    if (Array.isArray(queueList)) {
+        full.queue = queueList.map(arr => {
+            const numVal = arr[0];
+            const prefix = 'Q';
+            const formattedNumber = `${prefix}-${String(numVal).padStart(3, '0')}`;
+            
+            let status = 'waiting';
+            if (arr[2] === 'c') status = 'calling';
+            else if (arr[2] === 'd') status = 'completed';
+            else if (arr[2] === 's') status = 'skipped';
+            
+            return {
+                id: 'q_' + (arr[4] || Date.now() + Math.random()),
+                number: formattedNumber,
+                status: status,
+                timestamp: arr[1] || '',
+                completedAt: arr[3] || '',
+                rawTime: arr[4] || Date.now()
+            };
+        });
+    }
     return full;
 }
 
