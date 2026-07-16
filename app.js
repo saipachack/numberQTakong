@@ -16,6 +16,7 @@ let isUpdatingNetwork = false;
 let lastWriteTime = 0;
 let cloudRoomId = localStorage.getItem('snap_glow_cloud_room_id') || '';
 let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 'true';
+let selectedModalRoleVal = 'kiosk';
 
 // Device Presence State
 const myDeviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
@@ -92,8 +93,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialize Cloud Sync inputs & states
     updateCloudUI();
 
-    // Default step initialization
-    goToStep('welcome');
+    // Restore persisted role or default to kiosk
+    const savedRole = localStorage.getItem('snap_glow_device_role') || 'kiosk';
+    switchRole(savedRole);
 
     // Initial render
     renderAll();
@@ -124,17 +126,61 @@ function cleanDuplicateTickets(queue) {
     return Array.from(uniqueMap.values());
 }
 
+// Helper to get integer value from ticket number string (e.g. "Q-050" -> 50)
+function getTicketNumberValue(ticketNumberStr) {
+    if (!ticketNumberStr) return 0;
+    const match = ticketNumberStr.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+}
+
 // Helper to merge server queue state and local queue state without duplicates
-function mergeQueues(serverQueue, localQueue) {
-    const serverWaitingAndCalling = (serverQueue || []).filter(item => item && (item.status === 'waiting' || item.status === 'calling'));
-    const localCompletedOrSkipped = (localQueue || []).filter(item => item && (item.status === 'completed' || item.status === 'skipped'));
+function mergeQueues(serverQueue, localQueue, serverTicketCounter) {
+    const sQueue = serverQueue || [];
+    const lQueue = localQueue || [];
+    const tc = typeof serverTicketCounter === 'number' ? serverTicketCounter : 1;
     
-    // Avoid duplicates: if a ticket number is already completed/skipped locally, exclude it from server waiting/calling
-    const completedNumbers = new Set(localCompletedOrSkipped.map(item => item.number));
-    const filteredServer = serverWaitingAndCalling.filter(item => !completedNumbers.has(item.number));
+    // Create a set of ticket numbers present in the server queue
+    const serverNumbers = new Set(sQueue.filter(item => item && item.number).map(item => item.number));
     
-    const combined = [...filteredServer, ...localCompletedOrSkipped];
-    return cleanDuplicateTickets(combined);
+    // Filter local queue to keep:
+    // 1. Completed/skipped tickets
+    // 2. Waiting/calling tickets that are already on the server
+    // 3. Waiting/calling tickets not on the server but with number >= serverTicketCounter (unsynced new tickets)
+    const filteredLocal = lQueue.filter(item => {
+        if (!item || !item.number) return false;
+        
+        if (item.status === 'completed' || item.status === 'skipped') {
+            return true;
+        }
+        
+        if (serverNumbers.has(item.number)) {
+            return true;
+        }
+        
+        const numVal = getTicketNumberValue(item.number);
+        if (numVal >= tc) {
+            return true;
+        }
+        
+        return false;
+    });
+    
+    const combined = [...sQueue, ...filteredLocal];
+    const cleaned = cleanDuplicateTickets(combined);
+    
+    // Split and trim completed/skipped tickets to most recent 5
+    const waitingAndCalling = cleaned.filter(item => item && (item.status === 'waiting' || item.status === 'calling'));
+    const completedOrSkipped = cleaned.filter(item => item && (item.status === 'completed' || item.status === 'skipped'));
+    
+    completedOrSkipped.sort((a, b) => {
+        const aTime = a.rawTime || 0;
+        const bTime = b.rawTime || 0;
+        return bTime - aTime;
+    });
+    
+    const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 5);
+    
+    return [...waitingAndCalling, ...trimmedCompletedOrSkipped];
 }
 
 // Load/Save State
@@ -235,10 +281,11 @@ function loadStateFromServer() {
                 }
                 if (!isUpdatingNetwork && fetchStartTime >= lastWriteTime) {
                     if (validateState(data)) {
-                        const mergedQueue = mergeQueues(data.queue, state.queue);
+                        const isServerReset = data.ticketCounter === 1 && data.queue.length === 0;
+                        const mergedQueue = isServerReset ? [] : mergeQueues(data.queue, state.queue, data.ticketCounter);
                         const mergedState = {
                             queue: mergedQueue,
-                            ticketCounter: Math.max(state.ticketCounter, data.ticketCounter),
+                            ticketCounter: isServerReset ? 1 : Math.max(state.ticketCounter, data.ticketCounter),
                             avgWaitTimePerPerson: data.avgWaitTimePerPerson || 5
                         };
                         if (JSON.stringify(state) !== JSON.stringify(mergedState)) {
@@ -364,6 +411,9 @@ function getTrimmedState() {
 
 // UI Navigation / View Switching
 function switchRole(role) {
+    // Persist role in localStorage
+    localStorage.setItem('snap_glow_device_role', role);
+
     document.querySelectorAll('.role-view').forEach(view => {
         view.classList.remove('active-view');
     });
@@ -813,10 +863,33 @@ function switchOpTab(tab) {
 // -------------------------------------------------------------
 // CLOUD SYNC HELPERS (Custom Modal & Group Selector)
 // -------------------------------------------------------------
+function selectModalRole(role) {
+    selectedModalRoleVal = role;
+    
+    // Update active styles on modal buttons
+    document.querySelectorAll('.btn-role-select').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.border = '1px solid rgba(197, 160, 89, 0.3)';
+        btn.style.background = 'rgba(255, 255, 255, 0.5)';
+    });
+    
+    const activeBtn = document.getElementById(`modal-role-${role}`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.border = 'transparent';
+        activeBtn.style.background = 'var(--gradient-primary)';
+    }
+}
+
 function openCloudModal() {
     const modal = document.getElementById('cloud-sync-modal');
     if (modal) {
         modal.classList.remove('hidden');
+        
+        // Pre-select the current active role in the modal
+        const currentRole = getActiveRole().toLowerCase(); // 'kiosk', 'tv', or 'operator'
+        selectModalRole(currentRole);
+        
         updateModalState();
     }
 }
@@ -862,6 +935,11 @@ function connectToCloudRoomById(targetRoomId) {
                 isCloudSyncActive = true;
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
+                
+                // Apply the selected role from the modal immediately
+                if (typeof selectedModalRoleVal === 'string') {
+                    switchRole(selectedModalRoleVal);
+                }
                 
                 updateCloudUI();
                 saveStateToStorage(); // Pushes active state to the newly created room ID
@@ -930,10 +1008,16 @@ function connectToCloudRoomById(targetRoomId) {
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
-                const mergedQueue = mergeQueues(data.queue, state.queue);
+                // Apply the selected role from the modal immediately
+                if (typeof selectedModalRoleVal === 'string') {
+                    switchRole(selectedModalRoleVal);
+                }
+                
+                const isServerReset = data.ticketCounter === 1 && data.queue.length === 0;
+                const mergedQueue = isServerReset ? [] : mergeQueues(data.queue, state.queue, data.ticketCounter);
                 state = {
                     queue: mergedQueue,
-                    ticketCounter: Math.max(state.ticketCounter, data.ticketCounter),
+                    ticketCounter: isServerReset ? 1 : Math.max(state.ticketCounter, data.ticketCounter),
                     avgWaitTimePerPerson: data.avgWaitTimePerPerson || 5
                 };
                 localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
@@ -950,6 +1034,11 @@ function connectToCloudRoomById(targetRoomId) {
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
+                // Apply the selected role from the modal immediately
+                if (typeof selectedModalRoleVal === 'string') {
+                    switchRole(selectedModalRoleVal);
+                }
+                
                 updateCloudUI();
                 saveStateToStorage(); // Overwrites invalid data in the cloud with current local state
                 renderAll();
@@ -964,6 +1053,11 @@ function connectToCloudRoomById(targetRoomId) {
             isCloudSyncActive = true;
             localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
             localStorage.setItem('snap_glow_cloud_sync_active', true);
+            
+            // Apply the selected role from the modal immediately
+            if (typeof selectedModalRoleVal === 'string') {
+                switchRole(selectedModalRoleVal);
+            }
             
             updateCloudUI();
             saveStateToStorage();

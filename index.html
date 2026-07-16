@@ -325,6 +325,27 @@
             <div class="modal-body">
                 <p class="modal-desc">ເລືອກກຸ່ມດຽວກັນໃນທຸກອຸປະກອນ (Kiosk, TV, Operator) ເພື່ອຊິ້ງຂໍ້ມູນຄິວຖ່າຍຮູບຮ່ວມກັນ</p>
                 
+                <!-- Device Role Selection Section -->
+                <div class="role-selection-section">
+                    <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        ເລືອກບົດບາດຂອງອຸປະກອນນີ້ (Select Device Role):
+                    </label>
+                    <div class="role-selection-grid">
+                        <button type="button" class="btn-role-select active" id="modal-role-kiosk" onclick="selectModalRole('kiosk')">
+                            <span>🖨️</span>
+                            <strong>Kiosk (ຕູ້ກົດຄິວ)</strong>
+                        </button>
+                        <button type="button" class="btn-role-select" id="modal-role-tv" onclick="selectModalRole('tv')">
+                            <span>📺</span>
+                            <strong>TV (ຈໍສະແດງຜົນ)</strong>
+                        </button>
+                        <button type="button" class="btn-role-select" id="modal-role-operator" onclick="selectModalRole('operator')">
+                            <span>📱</span>
+                            <strong>Operator (ເອີ້ນຄິວ)</strong>
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="quick-groups-grid">
                     <button class="btn-group-select" onclick="selectQuickGroup('1')" id="btn-group-1">
                         <span class="group-icon">⭐</span>
