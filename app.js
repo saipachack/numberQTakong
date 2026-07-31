@@ -429,6 +429,14 @@ function saveStateToStorage() {
         .then(() => {
             isUpdatingNetwork = false;
             lastWriteTime = Date.now();
+            
+            // Backup queue to the active event document so we can resume it later
+            if (activeEventId) {
+                db.collection('events').doc(activeEventId).update({
+                    queueData: trimmedState.queue,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(() => {}); // ignore if it fails to avoid breaking UI
+            }
         })
         .catch(err => {
             console.error('Firestore write failed:', err);
