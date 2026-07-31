@@ -347,7 +347,7 @@ function saveStateToStorage() {
         // Write to extendsclass.com JSON Storage
         fetch(`https://extendsclass.com/api/json-storage/bin/${cloudBinId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ value: valueToSend })
         })
         .then(res => {
@@ -962,7 +962,7 @@ function resolveRoomBins(roomId) {
             const createBin = (data) => {
                 return fetch('https://extendsclass.com/api/json-storage/bin', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(data)
                 })
                 .then(r => {
@@ -984,7 +984,7 @@ function resolveRoomBins(roomId) {
                         
                         return fetch(`https://extendsclass.com/api/json-storage/bin/${MASTER_BIN_ID}`, {
                             method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'text/plain' },
                             body: JSON.stringify(m)
                         })
                         .then(updateRes => {
@@ -1312,7 +1312,7 @@ function syncDevicePresence() {
             // Write updated presence to extendsclass.com JSON Storage
             fetch(`https://extendsclass.com/api/json-storage/bin/${presenceBinId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({ value: valToSend })
             }).catch(() => {});
         })
