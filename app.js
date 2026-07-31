@@ -1006,8 +1006,8 @@ function renderAll() {
     }
 
     // Revenue quick stat
-    const allDoneItems = state.queue.filter(i => i.status === 'completed' || i.status === 'calling');
-    const totalRevenue = allDoneItems.reduce((sum, i) => sum + (i.price || 0), 0);
+    const validItems = state.queue.filter(i => i.package);
+    const totalRevenue = validItems.reduce((sum, i) => sum + (i.price || 0), 0);
     const revEl = document.getElementById('op-revenue-total');
     if (revEl) revEl.textContent = totalRevenue.toLocaleString() + ' ກີບ';
 
@@ -1794,7 +1794,8 @@ function createNewEvent() {
     let totalRev = 0, cashRev = 0, transferRev = 0;
     let counts = { none: 0, large: 0, small2: 0, combo: 0, large2: 0 };
     state.queue.forEach(item => {
-        if (item.status !== 'skipped' && item.package) {
+        // Count all tickets, including skipped ones
+        if (item.package) {
             totalRev += (item.price || 0);
             if (item.paymentMethod === 'cash') cashRev += (item.price || 0);
             if (item.paymentMethod === 'transfer') transferRev += (item.price || 0);
@@ -1859,8 +1860,8 @@ function loadAdminDashboard() {
     let revs = { none: 0, large: 0, small2: 0, combo: 0, large2: 0 };
 
     state.queue.forEach(item => {
-        // Only count completed/calling, or you can count all issued if preferred. We'll count all valid paid items
-        if (item.status !== 'skipped' && item.package) {
+        // Count all issued tickets in revenue, even if they were skipped, because payment is collected upfront
+        if (item.package) {
             totalRev += (item.price || 0);
             if (item.paymentMethod === 'cash') cashRev += (item.price || 0);
             if (item.paymentMethod === 'transfer') transferRev += (item.price || 0);
