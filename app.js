@@ -84,6 +84,27 @@ function subscribeToFirestoreRoom(roomId) {
     firestoreUnsubscribe = roomRef.onSnapshot((snap) => {
         if (!snap.exists) return;
         const data = snap.data();
+        
+        // Sync active event info from cloud
+        if (data.activeEventId !== undefined && data.activeEventId !== activeEventId) {
+            activeEventId = data.activeEventId;
+            if (activeEventId) {
+                localStorage.setItem('snap_glow_active_event_id', activeEventId);
+            } else {
+                localStorage.removeItem('snap_glow_active_event_id');
+            }
+        }
+        if (data.activeEventName !== undefined && data.activeEventName !== activeEventName) {
+            activeEventName = data.activeEventName || 'ຍັງບໍ່ໄດ້ສ້າງງານ';
+            localStorage.setItem('snap_glow_active_event_name', activeEventName);
+            
+            // Update admin UI if it's currently open
+            const eventNameEl = document.getElementById('admin-active-event-name');
+            const eventDateEl = document.getElementById('admin-active-event-date');
+            if (eventNameEl) eventNameEl.textContent = activeEventName;
+            if (eventDateEl) eventDateEl.textContent = "ID: " + (activeEventId || 'None');
+        }
+
         if (!data || !data.queue) return;
         const parsed = {
             queue: data.queue,
@@ -401,6 +422,8 @@ function saveStateToStorage() {
             queue: trimmedState.queue,
             ticketCounter: trimmedState.ticketCounter,
             avgWaitTimePerPerson: trimmedState.avgWaitTimePerPerson,
+            activeEventId: activeEventId || null,
+            activeEventName: activeEventName || 'ຍັງບໍ່ໄດ້ສ້າງງານ',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true })
         .then(() => {
