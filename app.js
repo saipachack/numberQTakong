@@ -1896,12 +1896,10 @@ function loadAdminDashboard() {
 function adminClearQueue() {
     if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຄິວທັງໝົດໃນງານນີ້? (ນີ້ຈະລຶບຄິວທີ່ກຳລັງລໍຖ້າ ແລະສຳເລັດແລ້ວທັງໝົດ, ແຕ່ຈະບໍ່ລຶບງານ)')) return;
     
-    // reset state
-    state.queue = [];
-    ticketCounter = 1;
-    saveLocalState();
+    // reset state properly and sync to cloud
+    resetState();
     
-    // update firestore active event
+    // update firestore active event history
     if (isCloudSyncActive && cloudRoomId && activeEventId) {
         db.collection('events').doc(activeEventId).update({
             queueData: [],
@@ -1931,6 +1929,10 @@ function resumeEvent(eventId) {
         
         const data = doc.data();
         activeEventId = doc.id;
+        localStorage.setItem('snap_glow_active_event_id', activeEventId);
+        activeEventName = data.name || 'ບໍ່ມີຊື່';
+        localStorage.setItem('snap_glow_active_event_name', activeEventName);
+        
         state.queue = data.queueData || [];
         
         // Find highest ticket number to resume counter
@@ -1939,9 +1941,9 @@ function resumeEvent(eventId) {
             const num = parseInt(t.number.replace('Q-',''), 10);
             if (!isNaN(num) && num > maxTick) maxTick = num;
         });
-        ticketCounter = maxTick + 1;
+        state.ticketCounter = maxTick + 1;
         
-        saveLocalState();
+        saveStateToStorage();
         alert('ໂຫຼດງານສຳເລັດ! ກັບໄປໜ້າ Operator ເພື່ອສືບຕໍ່.');
         loadAdminDashboard();
         updateOpTables();
