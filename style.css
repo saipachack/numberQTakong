@@ -2061,4 +2061,71 @@ input:checked + .slider:before {
 }
 
 
+/* Admin PIN Screen Styles */
+#admin-pin-screen {
+    text-align: center;
+    padding: 2rem 1rem;
+}
 
+.pin-dots {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.pin-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.1);
+    border: 2px solid rgba(197, 160, 89, 0.3);
+    transition: all 0.3s ease;
+}
+
+.pin-dot.active {
+    background: var(--neon-gold);
+    border-color: var(--neon-gold);
+    box-shadow: 0 0 10px rgba(197, 160, 89, 0.5);
+    transform: scale(1.1);
+}
+
+.pin-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 30px;
+}
+
+.pin-key {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-bounce);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.pin-key:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+    border-color: rgba(197, 160, 89, 0.4);
+}
+
+.pin-key:active {
+    transform: scale(0.95);
+    background: rgba(197, 160, 89, 0.15);
+}
+
+@media (max-width: 480px) {
+    .pin-key {
+        height: 60px;
+        font-size: 1.5rem;
+    }
+}
