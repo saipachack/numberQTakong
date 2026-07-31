@@ -1907,14 +1907,12 @@ function adminClearQueue() {
         }).then(() => {
             alert('ລຶບຄິວສຳເລັດ!');
             loadAdminDashboard();
-            updateOpTables();
-            updateTvUI();
+            renderAll();
         }).catch(e => alert('Error: ' + e.message));
     } else {
         alert('ລຶບຄິວສຳເລັດ (Local)!');
         loadAdminDashboard();
-        updateOpTables();
-        updateTvUI();
+        renderAll();
     }
 }
 
@@ -1946,8 +1944,7 @@ function resumeEvent(eventId) {
         saveStateToStorage();
         alert('ໂຫຼດງານສຳເລັດ! ກັບໄປໜ້າ Operator ເພື່ອສືບຕໍ່.');
         loadAdminDashboard();
-        updateOpTables();
-        updateTvUI();
+        renderAll();
     }).catch(e => {
         alert('ເກີດຂໍ້ຜິດພາດ: ' + e.message);
     });
@@ -1968,7 +1965,6 @@ function adminSwitchGroup(groupId) {
     // Wait briefly for firestore listener to attach and then reload dashboard
     setTimeout(() => {
         loadAdminDashboard();
-        updateOpTables();
-        updateTvUI();
+        renderAll();
     }, 500);
 }
