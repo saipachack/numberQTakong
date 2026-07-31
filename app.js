@@ -844,7 +844,13 @@ function renderAll() {
     const tvNumberBox = document.getElementById('tv-active-number');
     
     if (callingItem) {
-        tvNumberBox.innerHTML = `<span>${callingItem.number}</span>`;
+        let badgeHtml = '';
+        if (callingItem.package) {
+            const pkgCfg = PACKAGE_CONFIG[callingItem.package];
+            const badgeClass = callingItem.package === 'none' ? 'pkg-none' : (callingItem.package.includes('large') || callingItem.package === 'combo' ? 'pkg-large' : 'pkg-small');
+            badgeHtml = pkgCfg ? `<div style="font-size: 1.5rem; margin-top: 10px;"><span class="pkg-badge ${badgeClass}" style="padding: 8px 16px; border-radius: 20px;">${pkgCfg.label}</span></div>` : '';
+        }
+        tvNumberBox.innerHTML = `<span>${callingItem.number}</span>${badgeHtml}`;
     } else {
         tvNumberBox.innerHTML = `<span>- - -</span>`;
     }
@@ -862,16 +868,25 @@ function renderAll() {
                 <p>ບໍ່ມີຄິວລໍຖ້າໃນຂະນະນີ້</p>
             </div>`;
     } else {
-        tvUpcomingContainer.innerHTML = waitingList.map((item, idx) => `
-            <div class="upcoming-item">
-                <div class="item-left">
+        tvUpcomingContainer.innerHTML = waitingList.map((item, idx) => {
+            let badgeHtml = '';
+            if (item.package) {
+                const pkgCfg = PACKAGE_CONFIG[item.package];
+                const badgeClass = item.package === 'none' ? 'pkg-none' : (item.package.includes('large') || item.package === 'combo' ? 'pkg-large' : 'pkg-small');
+                badgeHtml = pkgCfg ? `<span class="pkg-badge ${badgeClass}" style="margin-left: 8px;">${pkgCfg.label}</span>` : '';
+            }
+            return `
+            <div class="upcoming-item" style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="item-left" style="display:flex; align-items:center;">
                     <div class="item-num">${item.number}</div>
+                    ${badgeHtml}
                 </div>
                 <div class="item-right">
                     <span>${idx * state.avgWaitTimePerPerson} ນາທີ</span>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     }
     
     // General Stats on TV View
@@ -896,7 +911,13 @@ function renderAll() {
     const btnComplete = document.getElementById('btn-complete');
     
     if (callingItem) {
-        opActiveNum.textContent = callingItem.number;
+        let badgeHtml = '';
+        if (callingItem.package) {
+            const pkgCfg = PACKAGE_CONFIG[callingItem.package];
+            const badgeClass = callingItem.package === 'none' ? 'pkg-none' : (callingItem.package.includes('large') || callingItem.package === 'combo' ? 'pkg-large' : 'pkg-small');
+            badgeHtml = pkgCfg ? ` <span class="pkg-badge ${badgeClass}" style="vertical-align: middle; margin-left: 10px; font-size: 0.9rem;">${pkgCfg.label}</span>` : '';
+        }
+        opActiveNum.innerHTML = callingItem.number + badgeHtml;
         btnRecall.removeAttribute('disabled');
         btnComplete.removeAttribute('disabled');
     } else {

@@ -1718,6 +1718,33 @@ input:checked + .slider:before {
     .ticket-instructions p {
         font-size: 0.85rem;
     }
+    
+    .package-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .payment-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .package-card {
+        padding: 1.25rem 1rem;
+    }
+    
+    .pay-card {
+        padding: 1.25rem 1rem;
+    }
+    
+    .kiosk-btn-row {
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+    
+    .kiosk-btn-row .btn {
+        width: 100%;
+    }
 }
 
 /* Print Styling */
