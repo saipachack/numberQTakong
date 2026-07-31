@@ -1860,17 +1860,80 @@ function loadAdminDashboard() {
                             <div style="font-size: 0.85rem; color: #10b981; margin-top: 4px;">${revText}</div>
                         </div>
                         <div>
-                            ${isActive ? '<span class="pkg-badge pkg-large">ກຳລັງໃຊ້ງານ</span>' : ''}
+                            ${isActive ? '<span class="pkg-badge pkg-large">ກຳລັງໃຊ້ງານ</span>' : `<button class="btn btn-secondary btn-sm" onclick="resumeEvent('${doc.id}')" style="font-size: 0.8rem; padding: 4px 10px; border-radius: 6px;"><i data-lucide="play" style="width: 14px; height: 14px;"></i> ເລືອກງານນີ້</button>`}
                         </div>
                     </div>
                 </li>`;
             });
             html += '</ul>';
             historyDiv.innerHTML = html;
+            lucide.createIcons(); // refresh icons
         }).catch(e => {
             historyDiv.innerHTML = `<p style="color:red">Failed to load history: ${e.message}</p>`;
         });
     } else {
         historyDiv.innerHTML = '<p style="color:var(--text-muted)">Cloud Sync ຖືກປິດ. ບໍ່ສາມາດດຶງປະຫວັດໄດ້.</p>';
     }
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN ACTIONS
+// ---------------------------------------------------------------------------
+
+function adminClearQueue() {
+    if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຄິວທັງໝົດໃນງານນີ້? (ນີ້ຈະລຶບຄິວທີ່ກຳລັງລໍຖ້າ ແລະສຳເລັດແລ້ວທັງໝົດ, ແຕ່ຈະບໍ່ລຶບງານ)')) return;
+    
+    // reset state
+    state.queue = [];
+    ticketCounter = 1;
+    saveLocalState();
+    
+    // update firestore active event
+    if (isCloudSyncActive && cloudRoomId && activeEventId) {
+        db.collection('events').doc(activeEventId).update({
+            queueData: [],
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            alert('ລຶບຄິວສຳເລັດ!');
+            loadAdminDashboard();
+            updateOpTables();
+            updateTvUI();
+        }).catch(e => alert('Error: ' + e.message));
+    } else {
+        alert('ລຶບຄິວສຳເລັດ (Local)!');
+        loadAdminDashboard();
+        updateOpTables();
+        updateTvUI();
+    }
+}
+
+function resumeEvent(eventId) {
+    if (!confirm('ຕ້ອງການເລືອກງານນີ້ມາເປັນງານປັດຈຸບັນ ແລະ ໂຫຼດຄິວເກົ່າມາໃຊ້ຕໍ່ບໍ່?')) return;
+    
+    db.collection('events').doc(eventId).get().then(doc => {
+        if (!doc.exists) {
+            alert('ບໍ່ພົບຂໍ້ມູນງານນີ້');
+            return;
+        }
+        
+        const data = doc.data();
+        activeEventId = doc.id;
+        state.queue = data.queueData || [];
+        
+        // Find highest ticket number to resume counter
+        let maxTick = 0;
+        state.queue.forEach(t => {
+            const num = parseInt(t.number.replace('Q-',''), 10);
+            if (!isNaN(num) && num > maxTick) maxTick = num;
+        });
+        ticketCounter = maxTick + 1;
+        
+        saveLocalState();
+        alert('ໂຫຼດງານສຳເລັດ! ກັບໄປໜ້າ Operator ເພື່ອສືບຕໍ່.');
+        loadAdminDashboard();
+        updateOpTables();
+        updateTvUI();
+    }).catch(e => {
+        alert('ເກີດຂໍ້ຜິດພາດ: ' + e.message);
+    });
 }
