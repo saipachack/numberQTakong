@@ -498,46 +498,34 @@ function submitTicket() {
     goToStep('package');
 }
 
-function selectPackage(pkgType) {
+function openPaymentModal(pkgType) {
     selectedPackage = pkgType;
-    // Update UI
-    document.querySelectorAll('.pkg-btn').forEach(b => b.classList.remove('selected'));
-    const btn = document.getElementById('pkg-' + pkgType);
-    if (btn) btn.classList.add('selected');
-    updatePackageSummary();
+    const cfg = PACKAGE_CONFIG[pkgType];
+    
+    // Update modal content
+    const nameEl = document.getElementById('modal-pkg-name');
+    const priceEl = document.getElementById('modal-pkg-price');
+    if (nameEl) nameEl.textContent = cfg ? cfg.label : '';
+    if (priceEl) priceEl.textContent = cfg ? cfg.price.toLocaleString() + ' ກີບ' : '';
+    
+    // Show modal
+    const modal = document.getElementById('payment-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
-function selectPayment(method) {
+function closePaymentModal() {
+    const modal = document.getElementById('payment-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function selectPaymentAndSubmit(method) {
     selectedPayment = method;
-    document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
-    const btn = document.getElementById('pay-' + method);
-    if (btn) btn.classList.add('selected');
-    updatePackageSummary();
-}
-
-function updatePackageSummary() {
-    const pkgEl = document.getElementById('summary-pkg-name');
-    const payEl = document.getElementById('summary-pay-name');
-    const priceEl = document.getElementById('summary-price');
-    const confirmBtn = document.getElementById('btn-confirm-pkg');
-
-    const cfg = selectedPackage ? PACKAGE_CONFIG[selectedPackage] : null;
-    if (pkgEl) pkgEl.textContent = cfg ? cfg.label : '— ຍັງບໍ່ໄດ້ເລືອກ —';
-    if (payEl) payEl.textContent = selectedPayment === 'cash' ? '💵 ເງິນສົດ' : selectedPayment === 'transfer' ? '📲 ໂອນເງິນ' : '— ຍັງບໍ່ໄດ້ເລືອກ —';
-    if (priceEl) priceEl.textContent = cfg ? (cfg.price).toLocaleString() + ' ກີບ' : '0 ກີບ';
-    if (confirmBtn) {
-        if (selectedPackage && selectedPayment) {
-            confirmBtn.removeAttribute('disabled');
-        } else {
-            confirmBtn.setAttribute('disabled', 'true');
-        }
-    }
+    closePaymentModal();
+    confirmPackageAndIssue();
 }
 
 function confirmPackageAndIssue() {
     if (!selectedPackage || !selectedPayment) return;
-    const btn = document.getElementById('btn-confirm-pkg');
-    if (btn) btn.setAttribute('disabled', 'true');
 
     // Get latest counter from Firestore before issuing
     const getLatest = isCloudSyncActive && cloudRoomId
@@ -850,9 +838,9 @@ function renderAll() {
             const badgeClass = callingItem.package === 'none' ? 'pkg-none' : (callingItem.package.includes('large') || callingItem.package === 'combo' ? 'pkg-large' : 'pkg-small');
             badgeHtml = pkgCfg ? `<div style="font-size: 1.5rem; margin-top: 10px;"><span class="pkg-badge ${badgeClass}" style="padding: 8px 16px; border-radius: 20px;">${pkgCfg.label}</span></div>` : '';
         }
-        tvNumberBox.innerHTML = `<span>${callingItem.number}</span>${badgeHtml}`;
+        tvNumberBox.innerHTML = `<div class="serving-number-text">${callingItem.number}</div>${badgeHtml}`;
     } else {
-        tvNumberBox.innerHTML = `<span>- - -</span>`;
+        tvNumberBox.innerHTML = `<div class="serving-number-text">- - -</div>`;
     }
     
     // TV Upcoming list

@@ -440,8 +440,8 @@ body {
 /* Package Selection step */
 .package-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
     margin-bottom: 2rem;
 }
 
@@ -975,7 +975,7 @@ body {
     animation: float-serving 4s infinite alternate ease-in-out;
 }
 
-.serving-number-box span {
+.serving-number-text {
     font-family: var(--font-outfit);
     font-size: 6.5rem;
     font-weight: 850;
@@ -1633,7 +1633,7 @@ input:checked + .slider:before {
         padding: 1rem 2.5rem;
     }
     
-    .serving-number-box span {
+    .serving-number-text {
         font-size: 4.5rem;
     }
     
@@ -1715,13 +1715,27 @@ input:checked + .slider:before {
         font-size: 0.85rem;
     }
     
-    .ticket-instructions p {
-        font-size: 0.85rem;
+    .package-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
     }
     
-    .package-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
+    .package-card, .pkg-btn {
+        padding: 0.75rem 0.5rem;
+        border-radius: 12px;
+    }
+    
+    .pkg-icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .pkg-name {
+        font-size: 0.75rem;
+    }
+    
+    .pkg-price {
+        font-size: 0.7rem;
     }
     
     .payment-grid {
