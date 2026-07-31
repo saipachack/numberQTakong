@@ -1956,6 +1956,12 @@ function resumeEvent(eventId) {
 function adminSwitchGroup(groupId) {
     if (!groupId) return;
     
+    // Clear local active event so it doesn't leak between groups
+    activeEventId = null;
+    activeEventName = 'ຍັງບໍ່ໄດ້ສ້າງງານ';
+    localStorage.removeItem('snap_glow_active_event_id');
+    localStorage.removeItem('snap_glow_active_event_name');
+
     // Connect to the new group
     connectToCloudRoomById(groupId);
     
