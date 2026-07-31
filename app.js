@@ -494,7 +494,6 @@ function submitTicket() {
     // Staff presses button → go to package selection screen
     selectedPackage = null;
     selectedPayment = null;
-    updatePackageSummary();
     goToStep('package');
 }
 
@@ -585,8 +584,6 @@ function confirmPackageAndIssue() {
         setTimeout(() => goToStep('welcome'), 15000);
     }).catch(err => {
         console.error('Failed to issue ticket:', err);
-    }).finally(() => {
-        if (btn) btn.removeAttribute('disabled');
     });
 }
 
