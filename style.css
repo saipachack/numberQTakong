@@ -28,7 +28,7 @@
     --gradient-green: linear-gradient(135deg, #10b981, #059669);
     
     --font-outfit: 'Outfit', sans-serif;
-    --font-lao: 'Noto Sans Lao', sans-serif;
+    --font-lao: 'Phetsarath OT', 'Noto Sans Lao', sans-serif;
     --font-playfair: 'Playfair Display', serif;
     
     --transition-smooth: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -517,7 +517,7 @@ body {
     font-family: var(--font-outfit);
     font-size: 1.6rem;
     font-weight: 800;
-    color: white;
+    color: var(--neon-green);
     margin-bottom: 1.5rem;
 }
 
