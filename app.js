@@ -1753,13 +1753,36 @@ function createNewEvent() {
         return;
     }
 
+    // 1. Calculate revenue for the CURRENT (old) event before archiving
+    let totalRev = 0, cashRev = 0, transferRev = 0;
+    let counts = { none: 0, large: 0, small2: 0, combo: 0, large2: 0 };
+    state.queue.forEach(item => {
+        if (item.status !== 'skipped' && item.package) {
+            totalRev += (item.price || 0);
+            if (item.paymentMethod === 'cash') cashRev += (item.price || 0);
+            if (item.paymentMethod === 'transfer') transferRev += (item.price || 0);
+            if (counts[item.package] !== undefined) counts[item.package]++;
+        }
+    });
+
+    const oldEventId = activeEventId;
+
+    // 2. Set new active event
     activeEventId = 'event_' + Date.now();
     activeEventName = nameInput;
     localStorage.setItem('snap_glow_active_event_id', activeEventId);
     localStorage.setItem('snap_glow_active_event_name', activeEventName);
     
-    // Save event metadata to Firestore
     if (isCloudSyncActive && cloudRoomId) {
+        // Save old event final stats
+        if (oldEventId) {
+            db.collection('events').doc(oldEventId).set({
+                revenue: { total: totalRev, cash: cashRev, transfer: transferRev, counts: counts },
+                endedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(() => {});
+        }
+        
+        // Save new event metadata
         db.collection('events').doc(activeEventId).set({
             name: activeEventName,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1823,7 +1846,18 @@ function loadAdminDashboard() {
                 const d = doc.data();
                 const dateStr = d.createdAt ? d.createdAt.toDate().toLocaleDateString('lo-LA') : 'Unknown Date';
                 const isActive = doc.id === activeEventId;
-                html += `<li><strong>${d.name}</strong> <span style="font-size:0.8rem; color:var(--text-muted)">(${dateStr})</span> ${isActive ? '<span class="pkg-badge pkg-large">ກຳລັງໃຊ້ງານ</span>' : ''}</li>`;
+                const revText = d.revenue ? `ລາຍຮັບ: ${d.revenue.total.toLocaleString()} ກີບ` : 'ບໍ່ມີຂໍ້ມູນລາຍຮັບ';
+                html += `<li>
+                    <div style="display:flex; justify-content: space-between; align-items:center; width: 100%;">
+                        <div>
+                            <strong>${d.name}</strong> <span style="font-size:0.8rem; color:var(--text-muted)">(${dateStr})</span>
+                            <div style="font-size: 0.85rem; color: #10b981; margin-top: 4px;">${revText}</div>
+                        </div>
+                        <div>
+                            ${isActive ? '<span class="pkg-badge pkg-large">ກຳລັງໃຊ້ງານ</span>' : ''}
+                        </div>
+                    </div>
+                </li>`;
             });
             html += '</ul>';
             historyDiv.innerHTML = html;
