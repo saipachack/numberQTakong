@@ -11,6 +11,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
     <!-- Icon library (Lucide icons via CDN) -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase SDKs (compat version for vanilla JS) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -65,6 +68,95 @@
                     </div>
                 </div>
 
+                <!-- Package Selection Step (Staff-Operated) -->
+                <div class="step-content hidden" id="step-package">
+                    <div class="package-selection-card glass-card">
+                        <div class="package-header">
+                            <h2>🎫 ເລືອກແພັກເກດ & ຊຳລະເງິນ</h2>
+                            <p>ພະນັກງານເລືອກຫຼັງລູກຄ້າຊຳລະ</p>
+                        </div>
+
+                        <!-- Package Type Selection -->
+                        <div class="package-section">
+                            <label class="section-label">📦 ປະເພດແພັກເກດ (Package Type)</label>
+                            <div class="package-grid">
+                                <button class="pkg-btn" id="pkg-none" onclick="selectPackage('none')">
+                                    <div class="pkg-icon">🎫</div>
+                                    <div class="pkg-name">ບໍ່ພິມຮູບ</div>
+                                    <div class="pkg-desc">Digital ເທົ່ານັ້ນ</div>
+                                    <div class="pkg-price">50,000 ກີບ</div>
+                                </button>
+                                <button class="pkg-btn" id="pkg-large" onclick="selectPackage('large')">
+                                    <div class="pkg-icon">🖼️</div>
+                                    <div class="pkg-name">ຮູບໃຫຍ່ 1 ໃບ</div>
+                                    <div class="pkg-desc">A4 / ໃຫຍ່</div>
+                                    <div class="pkg-price">100,000 ກີບ</div>
+                                </button>
+                                <button class="pkg-btn" id="pkg-small2" onclick="selectPackage('small2')">
+                                    <div class="pkg-icon">📸</div>
+                                    <div class="pkg-name">ຮູບນ້ອຍ 2 ໃບ</div>
+                                    <div class="pkg-desc">4×6 ສອງໃບ</div>
+                                    <div class="pkg-price">100,000 ກີບ</div>
+                                </button>
+                                <button class="pkg-btn" id="pkg-combo" onclick="selectPackage('combo')">
+                                    <div class="pkg-icon">🎁</div>
+                                    <div class="pkg-name">Combo</div>
+                                    <div class="pkg-desc">ໃຫຍ່ 1 + ນ້ອຍ 2</div>
+                                    <div class="pkg-price">150,000 ກີບ</div>
+                                </button>
+                                <button class="pkg-btn" id="pkg-large2" onclick="selectPackage('large2')">
+                                    <div class="pkg-icon">🖼️🖼️</div>
+                                    <div class="pkg-name">ຮູບໃຫຍ່ 2 ໃບ</div>
+                                    <div class="pkg-desc">A4 ສອງໃບ</div>
+                                    <div class="pkg-price">150,000 ກີບ</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Payment Method -->
+                        <div class="package-section">
+                            <label class="section-label">💳 ວິທີຊຳລະ (Payment Method)</label>
+                            <div class="payment-grid">
+                                <button class="pay-btn" id="pay-cash" onclick="selectPayment('cash')">
+                                    <div class="pay-icon">💵</div>
+                                    <div class="pay-name">ເງິນສົດ</div>
+                                    <div class="pay-desc">Cash</div>
+                                </button>
+                                <button class="pay-btn" id="pay-transfer" onclick="selectPayment('transfer')">
+                                    <div class="pay-icon">📲</div>
+                                    <div class="pay-name">ໂອນເງິນ</div>
+                                    <div class="pay-desc">Bank Transfer</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Summary + Confirm -->
+                        <div class="package-summary glass-card" id="pkg-summary">
+                            <div class="summary-row">
+                                <span class="summary-label">ແພັກເກດ:</span>
+                                <span class="summary-value" id="summary-pkg-name">— ຍັງບໍ່ໄດ້ເລືອກ —</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">ຊຳລະ:</span>
+                                <span class="summary-value" id="summary-pay-name">— ຍັງບໍ່ໄດ້ເລືອກ —</span>
+                            </div>
+                            <div class="summary-row total-row">
+                                <span class="summary-label">ລາຄາລວມ:</span>
+                                <span class="summary-value summary-price" id="summary-price">0 ກີບ</span>
+                            </div>
+                        </div>
+
+                        <div class="package-actions">
+                            <button class="btn btn-secondary" onclick="goToStep('welcome')">
+                                <i data-lucide="arrow-left"></i> ກັບຄືນ
+                            </button>
+                            <button class="btn btn-primary btn-lg" id="btn-confirm-pkg" onclick="confirmPackageAndIssue()" disabled>
+                                <i data-lucide="check-circle"></i> ຢືນຢັນ & ອອກຄິວ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Ticket Display screen (Take Photo / Remember Number) -->
                 <div class="step-content hidden" id="step-ticket">
                     <div class="kiosk-ticket-container">
@@ -77,7 +169,7 @@
                             <div class="ticket-body">
                                 <div class="ticket-number-label">ໝາຍເລກຄິວຂອງທ່ານແມ່ນ</div>
                                 <div class="ticket-number" id="ticket-display-number">Q-000</div>
-                                
+                                <div class="ticket-pkg-badge" id="ticket-pkg-badge"></div>
                                 <div class="ticket-instructions glass-card">
                                     <i data-lucide="smartphone"></i>
                                     <p>ກະລຸນາ<strong>ຖ່າຍຮູບໜ້າຈໍນີ້</strong> ຫຼື <strong>ຈົດຈຳໝາຍເລກຄິວ</strong>ຂອງທ່ານໄວ້</p>
@@ -93,6 +185,7 @@
                 </div>
             </div>
         </section>
+
 
         <!-- 2. PUBLIC TV DASHBOARD VIEW -->
         <section id="view-tv" class="role-view">
@@ -192,6 +285,13 @@
                             <p class="value" id="op-completed-total">0 ຄິວ</p>
                         </div>
                     </div>
+                    <div class="op-stat-card glass-card revenue-card" onclick="openAdminPanel()">
+                        <div class="op-stat-icon gold"><i data-lucide="banknote"></i></div>
+                        <div>
+                            <h4>ລາຍຮັບລວມ</h4>
+                            <p class="value revenue-value" id="op-revenue-total">0 ກີບ</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Main operator workspace split -->
@@ -278,7 +378,9 @@
                                     <thead>
                                         <tr>
                                             <th>ຄິວ</th>
-                                            <th>ເວລາຈອງ</th>
+                                            <th>ເວລາ</th>
+                                            <th>ແພັກເກດ</th>
+                                            <th>ຊຳລະ</th>
                                             <th>ຈັດການ</th>
                                         </tr>
                                     </thead>
@@ -294,8 +396,9 @@
                                     <thead>
                                         <tr>
                                             <th>ຄິວ</th>
-                                            <th>ເວລາຈອງ</th>
-                                            <th>ສຳເລັດເມື່ອ</th>
+                                            <th>ເວລາ</th>
+                                            <th>ແພັກເກດ</th>
+                                            <th>ຊຳລະ</th>
                                             <th>ສະຖານະ</th>
                                         </tr>
                                     </thead>
@@ -397,5 +500,115 @@
     </div>
 
     <script src="app.js"></script>
+
+    <!-- Admin Panel Modal -->
+    <div class="modal-overlay hidden" id="admin-modal">
+        <div class="modal-card glass-card admin-modal-card">
+            <div class="modal-header">
+                <h3><i data-lucide="shield"></i> ໜ້າ Admin — ລາຍງານ & ຈັດການ</h3>
+                <button class="modal-close-btn" onclick="closeAdminPanel()">&times;</button>
+            </div>
+            <div class="modal-body" id="admin-modal-body">
+                <!-- PIN Entry Screen -->
+                <div id="admin-pin-screen">
+                    <div class="admin-pin-header">
+                        <div class="pin-lock-icon">🔐</div>
+                        <h4>ກະລຸນາໃສ່ລະຫັດ Admin</h4>
+                        <p>Enter Admin PIN to continue</p>
+                    </div>
+                    <div class="pin-dots" id="pin-dots">
+                        <span class="pin-dot" id="dot-0"></span>
+                        <span class="pin-dot" id="dot-1"></span>
+                        <span class="pin-dot" id="dot-2"></span>
+                        <span class="pin-dot" id="dot-3"></span>
+                        <span class="pin-dot" id="dot-4"></span>
+                    </div>
+                    <p class="pin-error hidden" id="pin-error">❌ ລະຫັດຜິດ ກະລຸນາລອງໃໝ່</p>
+                    <div class="pin-keypad">
+                        <button class="pin-key" onclick="pinInput('1')">1</button>
+                        <button class="pin-key" onclick="pinInput('2')">2</button>
+                        <button class="pin-key" onclick="pinInput('3')">3</button>
+                        <button class="pin-key" onclick="pinInput('4')">4</button>
+                        <button class="pin-key" onclick="pinInput('5')">5</button>
+                        <button class="pin-key" onclick="pinInput('6')">6</button>
+                        <button class="pin-key" onclick="pinInput('7')">7</button>
+                        <button class="pin-key" onclick="pinInput('8')">8</button>
+                        <button class="pin-key" onclick="pinInput('9')">9</button>
+                        <button class="pin-key pin-clear" onclick="pinClear()">⌫</button>
+                        <button class="pin-key" onclick="pinInput('0')">0</button>
+                        <button class="pin-key pin-ok" onclick="pinSubmit()">✓</button>
+                    </div>
+                </div>
+
+                <!-- Admin Dashboard (shown after PIN) -->
+                <div id="admin-dashboard" class="hidden">
+                    <!-- Active Event Info -->
+                    <div class="admin-section">
+                        <div class="admin-event-header">
+                            <div>
+                                <h4>📍 ງານປັດຈຸບັນ (Active Event)</h4>
+                                <p class="admin-event-name" id="admin-active-event-name">ຍັງບໍ່ໄດ້ສ້າງງານ</p>
+                                <p class="admin-event-date" id="admin-active-event-date">—</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="showCreateEvent()">
+                                <i data-lucide="plus"></i> ສ້າງງານໃໝ່
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Revenue Summary -->
+                    <div class="admin-section">
+                        <h4>💰 ສະຫຼຸບລາຍຮັບ (Revenue Summary)</h4>
+                        <div class="revenue-grid">
+                            <div class="rev-card rev-total">
+                                <div class="rev-label">ລາຍຮັບລວມ</div>
+                                <div class="rev-value" id="adm-rev-total">0 ກີບ</div>
+                            </div>
+                            <div class="rev-card">
+                                <div class="rev-label">💵 ເງິນສົດ</div>
+                                <div class="rev-value" id="adm-rev-cash">0 ກີບ</div>
+                            </div>
+                            <div class="rev-card">
+                                <div class="rev-label">📲 ໂອນ</div>
+                                <div class="rev-value" id="adm-rev-transfer">0 ກີບ</div>
+                            </div>
+                        </div>
+                        <div class="rev-breakdown">
+                            <div class="rev-row"><span>🎫 ບໍ່ພິມ (50K)</span><span id="adm-rev-none">0 ຄິວ — 0 ກີບ</span></div>
+                            <div class="rev-row"><span>🖼️ ຮູບໃຫຍ່ 1 ໃບ (100K)</span><span id="adm-rev-large">0 ຄິວ — 0 ກີບ</span></div>
+                            <div class="rev-row"><span>📸 ຮູບນ້ອຍ 2 ໃບ (100K)</span><span id="adm-rev-small2">0 ຄິວ — 0 ກີບ</span></div>
+                            <div class="rev-row"><span>🎁 Combo (150K)</span><span id="adm-rev-combo">0 ຄິວ — 0 ກີບ</span></div>
+                            <div class="rev-row"><span>🖼️🖼️ ຮູບໃຫຍ່ 2 ໃບ (150K)</span><span id="adm-rev-large2">0 ຄິວ — 0 ກີບ</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Create Event Form (hidden by default) -->
+                    <div class="admin-section hidden" id="create-event-form">
+                        <h4>🎪 ສ້າງງານໃໝ່</h4>
+                        <p class="admin-warn">⚠️ ງານໃໝ່ຈະ Archive ງານເກົ່າ ແລະ Reset ຄິວ → ເລີ່ມຈາກ Q-001 ໃໝ່</p>
+                        <div class="form-group">
+                            <label>ຊື່ງານ (Event Name):</label>
+                            <input type="text" id="new-event-name" class="form-select" placeholder="ເຊັ່ນ: Wedding ABC, ງານ XYZ...">
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="hideCreateEvent()">ຍົກເລີກ</button>
+                            <button class="btn btn-success btn-sm" onclick="createNewEvent()">
+                                <i data-lucide="check"></i> ສ້າງງານ & Reset ຄິວ
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Past Events History -->
+                    <div class="admin-section">
+                        <h4>📜 ງານທີ່ຜ່ານມາ (Event History)</h4>
+                        <div id="admin-event-history">
+                            <p style="color: var(--text-muted); font-size: 0.85rem;">ກຳລັງໂຫຼດ...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

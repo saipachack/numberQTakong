@@ -1,15 +1,47 @@
 // ==========================================
 // SNAP & GLOW Queue Management Script
+// Powered by Firebase Firestore (Real-time)
 // ==========================================
 
-// Global state
+// ── Firebase Configuration ──────────────────────────────────
+const firebaseConfig = {
+    apiKey: "AIzaSyB6cvzGms7c0lnXFRptVT7M9ocxXrEnYLc",
+    authDomain: "takong-photobooth.firebaseapp.com",
+    projectId: "takong-photobooth",
+    storageBucket: "takong-photobooth.firebasestorage.app",
+    messagingSenderId: "366115705560",
+    appId: "1:366115705560:web:16330112b4a9478e9cfdad"
+};
+
+const fbApp = firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ── Global state ─────────────────────────────────────────────
 let state = {
     queue: [],
     ticketCounter: 1,
-    avgWaitTimePerPerson: 5 // minutes
+    avgWaitTimePerPerson: 5
 };
 
-// Web Speech Synthesis
+// ── Package & Payment ─────────────────────────────────────────
+let selectedPackage = null;    // 'none' | 'large' | 'small2' | 'combo' | 'large2'
+let selectedPayment = null;    // 'cash' | 'transfer'
+
+const PACKAGE_CONFIG = {
+    none:   { label: '🎫 ບໍ່ພິມ',        price: 50000,  desc: 'Digital ເທົ່ານັ້ນ' },
+    large:  { label: '🖼️ ຮູບໃຫຍ່ 1 ໃບ', price: 100000, desc: 'A4 / ໃຫຍ່' },
+    small2: { label: '📸 ຮູບນ້ອຍ 2 ໃບ', price: 100000, desc: '4×6 ສອງໃບ' },
+    combo:  { label: '🎁 Combo',          price: 150000, desc: 'ໃຫຍ່1 + ນ້ອຍ2' },
+    large2: { label: '🖼️🖼️ ຮູບໃຫຍ່ 2 ໃບ', price: 150000, desc: 'A4 ສອງໃບ' }
+};
+
+// ── Admin ─────────────────────────────────────────────────────
+const ADMIN_PIN = '5525';
+let adminPinEntry = '';
+let activeEventId = localStorage.getItem('snap_glow_active_event_id') || null;
+let activeEventName = localStorage.getItem('snap_glow_active_event_name') || 'ງານທົ່ວໄປ';
+
+// ── Cloud / Firebase Sync ─────────────────────────────────────
 const synth = window.speechSynthesis;
 let availableVoices = [];
 let isUpdatingNetwork = false;
@@ -17,41 +49,59 @@ let lastWriteTime = 0;
 let cloudRoomId = localStorage.getItem('snap_glow_cloud_room_id') || '';
 let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 'true';
 let selectedModalRoleVal = 'kiosk';
-let cloudBinId = localStorage.getItem('snap_glow_cloud_bin_id') || '';
-let presenceBinId = localStorage.getItem('snap_glow_cloud_presence_bin_id') || '';
-const MASTER_BIN_ID = 'adfbded';
+let firestoreUnsubscribe = null;   // Firestore onSnapshot unsubscribe function
+const MASTER_BIN_ID = 'adfbded';   // legacy - kept for backward compat display only
 
 // Device Presence State
 const myDeviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
 let activeDevicesCount = 1;
 
-// Interval trackers for dynamic polling
-let pollIntervalId = null;
+// Interval trackers for dynamic polling (presence only now, queue uses onSnapshot)
 let presenceIntervalId = null;
+let pollIntervalId = null;
 
+
+// ── setupIntervals: presence only (queue uses Firestore onSnapshot) ──
 function setupIntervals() {
-    if (document.hidden) return; // Don't setup intervals if page is in background
-    
+    if (document.hidden) return;
     if (pollIntervalId) clearInterval(pollIntervalId);
     if (presenceIntervalId) clearInterval(presenceIntervalId);
-    
+
     const role = getActiveRole();
-    let pollTime = 1500;      // 1.5s for TV (needs to be fast, plugged in)
-    let presenceTime = 30000; // 30s for TV
-    
-    if (role === 'Kiosk') {
-        pollTime = 12000;       // 12s for Kiosk (saves battery)
-        presenceTime = 45000;   // 45s for Kiosk
-    } else if (role === 'Operator') {
-        pollTime = 3500;        // 3.5s for Operator (saves battery on mobile)
-        presenceTime = 45000;   // 45s for Operator
-    }
-    
-    pollIntervalId = setInterval(loadStateFromServer, pollTime);
+    const presenceTime = (role === 'TV') ? 30000 : 45000;
     presenceIntervalId = setInterval(syncDevicePresence, presenceTime);
 }
 
-// Page visibility change listener to pause polling in background
+// ── Subscribe / Unsubscribe Firestore room ──────────────────
+function subscribeToFirestoreRoom(roomId) {
+    if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
+        firestoreUnsubscribe = null;
+    }
+    if (!roomId) return;
+
+    const roomRef = db.collection('rooms').doc(roomId);
+    firestoreUnsubscribe = roomRef.onSnapshot((snap) => {
+        if (!snap.exists) return;
+        const data = snap.data();
+        if (!data || !data.queue) return;
+        const parsed = {
+            queue: data.queue,
+            ticketCounter: data.ticketCounter || 1,
+            avgWaitTimePerPerson: data.avgWaitTimePerPerson || 5
+        };
+        if (validateState(parsed)) {
+            state = parsed;
+            localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
+            renderAll();
+        }
+    }, (err) => {
+        console.warn('Firestore onSnapshot error:', err);
+        loadStateFromStorage();
+    });
+}
+
+// ── Page visibility ──────────────────────────────────────────
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         if (pollIntervalId) clearInterval(pollIntervalId);
@@ -59,26 +109,33 @@ document.addEventListener('visibilitychange', () => {
         pollIntervalId = null;
         presenceIntervalId = null;
     } else {
-        // Resume polling and fetch instantly
         loadStateFromServer();
         syncDevicePresence();
         setupIntervals();
     }
 });
 
+
+
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
     // Initialize icons
     lucide.createIcons();
-    
-    // Load state from server initially, fallback to local storage
-    loadStateFromServer();
-    
-    // Start dynamic polling intervals
+
+    // If cloud sync is active, subscribe to Firestore room
+    if (isCloudSyncActive && cloudRoomId) {
+        subscribeToFirestoreRoom(cloudRoomId);
+    } else {
+        loadStateFromServer();
+    }
+
+    // Start presence sync intervals
     setupIntervals();
-    
-    // Start initial presence sync
     syncDevicePresence();
+
+    // Ensure active event exists on Firestore
+    ensureActiveEvent();
+
     // Set up local storage listener for multi-window sync
     window.addEventListener('storage', (e) => {
         if (e.key === 'snap_glow_queue_state') {
@@ -103,6 +160,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initial render
     renderAll();
 });
+
+
 
 // Helper to clean duplicate tickets from a queue, keeping the one with higher status precedence
 function cleanDuplicateTickets(queue) {
@@ -334,57 +393,34 @@ function loadStateFromServer() {
 function saveStateToStorage() {
     localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
     renderAll();
-    
-    isUpdatingNetwork = true;
-    
+
     if (isCloudSyncActive && cloudRoomId) {
-        if (!cloudBinId) {
-            isUpdatingNetwork = false;
-            return;
-        }
+        isUpdatingNetwork = true;
         const trimmedState = getTrimmedState();
-        const valueToSend = compressCompactState(trimmedState);
-        // Write to extendsclass.com JSON Storage
-        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudBinId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ value: valueToSend })
-        })
-        .then(res => {
-            if (!res.ok) throw new Error("Cloud write failed");
-            return res.json();
-        })
-        .then(data => {
+        db.collection('rooms').doc(cloudRoomId).set({
+            queue: trimmedState.queue,
+            ticketCounter: trimmedState.ticketCounter,
+            avgWaitTimePerPerson: trimmedState.avgWaitTimePerPerson,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true })
+        .then(() => {
             isUpdatingNetwork = false;
             lastWriteTime = Date.now();
         })
         .catch(err => {
-            console.error("Failed to sync queue state to cloud:", err);
+            console.error('Firestore write failed:', err);
             isUpdatingNetwork = false;
-            lastWriteTime = Date.now();
         });
     } else {
-        // Write to local python server
+        // Write to local python server fallback
         fetch('/api/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
             body: JSON.stringify(state)
-        })
-        .then(res => {
-            if (!res.ok) throw new Error("Server write failed");
-            return res.json();
-        })
-        .then(data => {
-            isUpdatingNetwork = false;
-            lastWriteTime = Date.now();
-        })
-        .catch(err => {
-            console.error("Failed to sync queue state to server:", err);
-            isUpdatingNetwork = false;
-            lastWriteTime = Date.now();
-        });
+        }).catch(() => {});
     }
 }
+
 
 function resetState() {
     state = {
@@ -455,65 +491,118 @@ function switchRole(role) {
 // KIOSK REGISTRATION LOGIC
 // -------------------------------------------------------------
 function submitTicket() {
-    const btn = document.querySelector('.btn-get-queue');
-    let originalHtml = '';
-    if (btn) {
-        btn.setAttribute('disabled', 'true');
-        originalHtml = btn.innerHTML;
-        btn.innerHTML = `<span style="display:inline-block; animation: spin 1s linear infinite; margin-right: 6px;">⏳</span> ກຳລັງໂຫຼດ...`;
-    }
-    
-    // Fetch latest state immediately before printing to prevent counter collisions
-    const loadPromise = loadStateFromServer();
-    
-    // Ensure we handle case where loadStateFromServer doesn't return a promise (fallback local mock or storage)
-    const resolvePromise = (loadPromise && typeof loadPromise.then === 'function') 
-        ? loadPromise 
-        : Promise.resolve();
-        
-    resolvePromise
-        .then(() => {
-            const prefix = 'Q';
-            const formattedNumber = `${prefix}-${String(state.ticketCounter).padStart(3, '0')}`;
-            const timestampString = new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' });
-            
-            const newQueueItem = {
-                id: 'q_' + Date.now(),
-                number: formattedNumber,
-                status: 'waiting',
-                timestamp: timestampString,
-                rawTime: Date.now()
-            };
-            
-            state.queue.push(newQueueItem);
-            state.ticketCounter += 1;
-            saveStateToStorage();
-            
-            // Calculate Wait Time
-            const waitingItems = state.queue.filter(item => item.status === 'waiting');
-            const waitTime = (waitingItems.length - 1) * state.avgWaitTimePerPerson;
-            
-            // Populate Ticket Details
-            document.getElementById('ticket-display-number').textContent = formattedNumber;
-            document.getElementById('ticket-display-wait').textContent = waitTime > 0 ? `${waitTime} ນາທີ` : "ພ້ອມຖ່າຍທັນທີ";
-            
-            // Play ticket generate beep
-            playTicketBeep();
-            
-            // Go to Ticket Step
-            goToStep('ticket');
-        })
-        .catch(err => {
-            console.error("Failed to sync queue counter prior to printing:", err);
-        })
-        .finally(() => {
-            if (btn) {
-                btn.removeAttribute('disabled');
-                btn.innerHTML = originalHtml;
-                lucide.createIcons();
-            }
-        });
+    // Staff presses button → go to package selection screen
+    selectedPackage = null;
+    selectedPayment = null;
+    updatePackageSummary();
+    goToStep('package');
 }
+
+function selectPackage(pkgType) {
+    selectedPackage = pkgType;
+    // Update UI
+    document.querySelectorAll('.pkg-btn').forEach(b => b.classList.remove('selected'));
+    const btn = document.getElementById('pkg-' + pkgType);
+    if (btn) btn.classList.add('selected');
+    updatePackageSummary();
+}
+
+function selectPayment(method) {
+    selectedPayment = method;
+    document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
+    const btn = document.getElementById('pay-' + method);
+    if (btn) btn.classList.add('selected');
+    updatePackageSummary();
+}
+
+function updatePackageSummary() {
+    const pkgEl = document.getElementById('summary-pkg-name');
+    const payEl = document.getElementById('summary-pay-name');
+    const priceEl = document.getElementById('summary-price');
+    const confirmBtn = document.getElementById('btn-confirm-pkg');
+
+    const cfg = selectedPackage ? PACKAGE_CONFIG[selectedPackage] : null;
+    if (pkgEl) pkgEl.textContent = cfg ? cfg.label : '— ຍັງບໍ່ໄດ້ເລືອກ —';
+    if (payEl) payEl.textContent = selectedPayment === 'cash' ? '💵 ເງິນສົດ' : selectedPayment === 'transfer' ? '📲 ໂອນເງິນ' : '— ຍັງບໍ່ໄດ້ເລືອກ —';
+    if (priceEl) priceEl.textContent = cfg ? (cfg.price).toLocaleString() + ' ກີບ' : '0 ກີບ';
+    if (confirmBtn) {
+        if (selectedPackage && selectedPayment) {
+            confirmBtn.removeAttribute('disabled');
+        } else {
+            confirmBtn.setAttribute('disabled', 'true');
+        }
+    }
+}
+
+function confirmPackageAndIssue() {
+    if (!selectedPackage || !selectedPayment) return;
+    const btn = document.getElementById('btn-confirm-pkg');
+    if (btn) btn.setAttribute('disabled', 'true');
+
+    // Get latest counter from Firestore before issuing
+    const getLatest = isCloudSyncActive && cloudRoomId
+        ? db.collection('rooms').doc(cloudRoomId).get().then(snap => {
+            if (snap.exists && snap.data().ticketCounter) {
+                const serverCounter = snap.data().ticketCounter;
+                if (serverCounter > state.ticketCounter) {
+                    state.ticketCounter = serverCounter;
+                }
+            }
+          })
+        : Promise.resolve();
+
+    getLatest.then(() => {
+        const prefix = 'Q';
+        const formattedNumber = `${prefix}-${String(state.ticketCounter).padStart(3, '0')}`;
+        const timestampString = new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' });
+        const cfg = PACKAGE_CONFIG[selectedPackage];
+
+        const newQueueItem = {
+            id: 'q_' + Date.now(),
+            number: formattedNumber,
+            status: 'waiting',
+            timestamp: timestampString,
+            rawTime: Date.now(),
+            package: selectedPackage,
+            paymentMethod: selectedPayment,
+            price: cfg.price,
+            packageLabel: cfg.label,
+            eventId: activeEventId || 'no_event'
+        };
+
+        state.queue.push(newQueueItem);
+        state.ticketCounter += 1;
+        saveStateToStorage();
+
+        // Also write ticket to Firestore events subcollection if event active
+        if (activeEventId) {
+            db.collection('events').doc(activeEventId)
+              .collection('tickets').doc(newQueueItem.id)
+              .set(newQueueItem).catch(() => {});
+        }
+
+        // Show ticket to customer
+        const waitingItems = state.queue.filter(item => item.status === 'waiting');
+        const waitTime = (waitingItems.length - 1) * state.avgWaitTimePerPerson;
+        document.getElementById('ticket-display-number').textContent = formattedNumber;
+        document.getElementById('ticket-display-wait').textContent = waitTime > 0 ? `${waitTime} ນາທີ` : 'ພ້ອມຖ່າຍທັນທີ';
+
+        const badgeEl = document.getElementById('ticket-pkg-badge');
+        if (badgeEl) badgeEl.textContent = cfg.label + ' — ' + cfg.price.toLocaleString() + ' ກີບ';
+
+        playTicketBeep();
+        goToStep('ticket');
+
+        // Reset after 15s back to welcome
+        setTimeout(() => goToStep('welcome'), 15000);
+    }).catch(err => {
+        console.error('Failed to issue ticket:', err);
+    }).finally(() => {
+        if (btn) btn.removeAttribute('disabled');
+    });
+}
+
+
 
 function playTicketBeep() {
     try {
@@ -538,13 +627,13 @@ function goToStep(step) {
     document.querySelectorAll('.step-content').forEach(content => {
         content.classList.add('hidden');
     });
-    
-    if (step === 'welcome') {
-        document.getElementById('step-welcome').classList.remove('hidden');
-    } else if (step === 'ticket') {
-        document.getElementById('step-ticket').classList.remove('hidden');
+    const el = document.getElementById('step-' + step);
+    if (el) {
+        el.classList.remove('hidden');
+        lucide.createIcons();
     }
 }
+
 
 function restartKiosk() {
     goToStep('welcome');
@@ -822,40 +911,69 @@ function renderAll() {
     
     const waitingTableBody = document.getElementById('table-waiting-body');
     if (waitingList.length === 0) {
-        waitingTableBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 2rem;">ບໍ່ມີຄິວລໍຖ້າ</td></tr>`;
+        waitingTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">ບໍ່ມີຄິວລໍຖ້າ</td></tr>`;
     } else {
-        waitingTableBody.innerHTML = waitingList.map(item => `
+        waitingTableBody.innerHTML = waitingList.map(item => {
+            const pkgCfg = item.package ? PACKAGE_CONFIG[item.package] : null;
+            const pkgBadge = pkgCfg
+                ? `<span class="pkg-badge pkg-${item.package}">${pkgCfg.label}</span>`
+                : `<span class="pkg-badge pkg-none" style="opacity:0.4">—</span>`;
+            const payBadge = item.paymentMethod === 'cash'
+                ? `<span class="pay-badge pay-cash">💵</span>`
+                : item.paymentMethod === 'transfer'
+                ? `<span class="pay-badge pay-transfer">📲</span>`
+                : `<span style="opacity:0.3">—</span>`;
+            return `
             <tr>
                 <td style="font-family: var(--font-outfit); font-weight: 700; font-size: 1.1rem; color: var(--text-main); vertical-align: middle;">${item.number}</td>
                 <td style="color: var(--text-muted); vertical-align: middle;">${item.timestamp}</td>
+                <td style="vertical-align: middle;">${pkgBadge}</td>
+                <td style="vertical-align: middle;">${payBadge}</td>
                 <td style="vertical-align: middle;">
                     <button class="op-table-btn skip" onclick="opSkip('${item.id}')" title="ຂ້າມຄິວ (Skip)">
                         <i data-lucide="user-x"></i>
                     </button>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
     }
     
     const completedTableBody = document.getElementById('table-completed-body');
     if (completedList.length === 0) {
-        completedTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">ບໍ່ມີປະຫວັດຄິວ</td></tr>`;
+        completedTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">ບໍ່ມີປະຫວັດຄິວ</td></tr>`;
     } else {
         const sortedCompleted = [...completedList].sort((a, b) => b.rawTime - a.rawTime);
-        completedTableBody.innerHTML = sortedCompleted.map(item => `
+        completedTableBody.innerHTML = sortedCompleted.map(item => {
+            const pkgCfg = item.package ? PACKAGE_CONFIG[item.package] : null;
+            const pkgBadge = pkgCfg
+                ? `<span class="pkg-badge pkg-${item.package}">${pkgCfg.label}</span>`
+                : `<span style="opacity:0.3">—</span>`;
+            const payBadge = item.paymentMethod === 'cash'
+                ? `<span class="pay-badge pay-cash">💵 ສົດ</span>`
+                : item.paymentMethod === 'transfer'
+                ? `<span class="pay-badge pay-transfer">📲 ໂອນ</span>`
+                : `<span style="opacity:0.3">—</span>`;
+            return `
             <tr>
                 <td style="font-family: var(--font-outfit); font-weight: 700; color: var(--text-muted); vertical-align: middle;">${item.number}</td>
                 <td style="vertical-align: middle;">${item.timestamp}</td>
-                <td style="vertical-align: middle;">${item.completedAt || '-'}</td>
+                <td style="vertical-align: middle;">${pkgBadge}</td>
+                <td style="vertical-align: middle;">${payBadge}</td>
                 <td style="vertical-align: middle;">
                     <span style="color: ${item.status === 'completed' ? 'var(--neon-green)' : 'var(--neon-amber)'}; font-weight: 600;">
-                        ${item.status === 'completed' ? 'ສຳເລັດແລ້ວ' : 'ຂ້າມຄິວ'}
+                        ${item.status === 'completed' ? 'ສຳເລັດ' : 'ຂ້າມ'}
                     </span>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
     }
-    
+
+    // Revenue quick stat
+    const allDoneItems = state.queue.filter(i => i.status === 'completed' || i.status === 'calling');
+    const totalRevenue = allDoneItems.reduce((sum, i) => sum + (i.price || 0), 0);
+    const revEl = document.getElementById('op-revenue-total');
+    if (revEl) revEl.textContent = totalRevenue.toLocaleString() + ' ກີບ';
+
     lucide.createIcons();
 }
 
@@ -1002,166 +1120,39 @@ function resolveRoomBins(roomId) {
 
 function connectToCloudRoomById(targetRoomId) {
     if (!targetRoomId) return;
-    
+
     // Show user a quick visual loading
     const activeIdText = document.getElementById('modal-active-room-id');
     if (activeIdText) activeIdText.textContent = "ກຳລັງເຊື່ອມຕໍ່ (ກວດສອບຖານຂໍ້ມູນ)...";
-    
-    resolveRoomBins(targetRoomId)
-        .then(resIds => {
-            cloudBinId = resIds.cloudBinId;
-            presenceBinId = resIds.presenceBinId;
-            localStorage.setItem('snap_glow_cloud_bin_id', cloudBinId);
-            localStorage.setItem('snap_glow_cloud_presence_bin_id', presenceBinId);
-            
-            if (activeIdText) activeIdText.textContent = "ກຳລັງໂຫຼດຂໍ້ມູນຄິວ...";
-            
-            // Fetch state from extendsclass.com JSON Storage
-            return fetch(`https://extendsclass.com/api/json-storage/bin/${cloudBinId}?t=${Date.now()}`);
-        })
-        .then(res => {
-            if (!res.ok) throw new Error("Invalid ID");
-            return res.json();
-        })
-        .then(resObj => {
-            // ExtendsClass returns the JSON object. We stored our value in the 'value' field.
-            const val = (resObj && typeof resObj === 'object' && resObj.value !== undefined) ? resObj.value : resObj;
-            if (!val) {
-                // Fallback: if value inside is empty (should not happen since we initialize it)
-                cloudRoomId = targetRoomId;
-                isCloudSyncActive = true;
-                localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
-                localStorage.setItem('snap_glow_cloud_sync_active', true);
-                
-                if (typeof selectedModalRoleVal === 'string') {
-                    switchRole(selectedModalRoleVal);
-                }
-                
-                updateCloudUI();
-                saveStateToStorage();
-                renderAll();
-                updateModalState();
-                syncDevicePresence();
-                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
-                return;
-            }
-            
-            let data;
-            let isValid = false;
-            try {
-                if (typeof val === 'string' && /^[0-9a-z]{7,}$/.test(val)) {
-                    data = decompressCompactState(val);
-                    if (validateState(data)) isValid = true;
-                } else if (typeof val === 'string' && /^\d+(,\d+)*$/.test(val)) {
-                    const arr = val.split(',').map(Number);
-                    data = decompressState(arr);
-                    if (validateState(data)) isValid = true;
-                } else {
-                    let parsed = typeof val === 'string' ? JSON.parse(val) : val;
-                    if (Array.isArray(parsed)) {
-                        data = decompressState(parsed);
-                        if (validateState(data)) isValid = true;
-                    } else if (parsed && typeof parsed === 'object') {
-                        data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
-                        if (validateState(data)) isValid = true;
-                    }
-                }
-            } catch (e) {}
-            
-            if (!isValid) {
-                try {
-                    const decoded = typeof val === 'string' ? safeDecode(val) : safeDecode(JSON.stringify(val));
-                    const parsed = JSON.parse(decoded);
-                    if (Array.isArray(parsed)) {
-                        data = decompressState(parsed);
-                        if (validateState(data)) isValid = true;
-                    } else if (parsed && typeof parsed === 'object') {
-                        data = (parsed.q || parsed.queue) ? decompressState(parsed) : parsed;
-                        if (validateState(data)) isValid = true;
-                    }
-                } catch (e) {}
-            }
-            
-            if (!isValid) {
-                try {
-                    data = typeof val === 'string' ? JSON.parse(hexToString(val)) : val;
-                    if (validateState(data)) isValid = true;
-                } catch (e) {
-                    try {
-                        data = typeof val === 'string' ? JSON.parse(decodeURIComponent(val)) : val;
-                        if (validateState(data)) isValid = true;
-                    } catch (e2) {
-                        try {
-                            data = typeof val === 'string' ? JSON.parse(val) : val;
-                            if (validateState(data)) isValid = true;
-                        } catch (e3) {}
-                    }
-                }
-            }
-            
-            if (isValid) {
-                cloudRoomId = targetRoomId;
-                isCloudSyncActive = true;
-                localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
-                localStorage.setItem('snap_glow_cloud_sync_active', true);
-                
-                // Apply the selected role from the modal immediately
-                if (typeof selectedModalRoleVal === 'string') {
-                    switchRole(selectedModalRoleVal);
-                }
-                
-                const isServerReset = data.ticketCounter === 1 && data.queue.length === 0;
-                const mergedQueue = isServerReset ? [] : mergeQueues(data.queue, state.queue, data.ticketCounter);
-                state = {
-                    queue: mergedQueue,
-                    ticketCounter: isServerReset ? 1 : Math.max(state.ticketCounter, data.ticketCounter),
-                    avgWaitTimePerPerson: data.avgWaitTimePerPerson || 5
-                };
-                localStorage.setItem('snap_glow_queue_state', JSON.stringify(state));
-                
-                updateCloudUI();
-                renderAll();
-                updateModalState();
-                syncDevicePresence(); // Refresh presence instantly
-                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ "${targetRoomId}" ສຳເລັດແລ້ວ!`);
-            } else {
-                // Auto-initialize if data in room is invalid
-                cloudRoomId = targetRoomId;
-                isCloudSyncActive = true;
-                localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
-                localStorage.setItem('snap_glow_cloud_sync_active', true);
-                
-                // Apply the selected role from the modal immediately
-                if (typeof selectedModalRoleVal === 'string') {
-                    switchRole(selectedModalRoleVal);
-                }
-                
-                updateCloudUI();
-                saveStateToStorage(); // Overwrites invalid data in the cloud with current local state
-                renderAll();
-                updateModalState();
-                syncDevicePresence(); // Refresh presence instantly
-                alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ "${targetRoomId}" ສຳເລັດແລ້ວ! (ລີເຊັດຂໍ້ມູນຫ້ອງໃໝ່)`);
-            }
-        })
-        .catch(err => {
-            // Fallback for network error / key not found. Initialize new room.
-            cloudRoomId = targetRoomId;
-            isCloudSyncActive = true;
-            localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
-            localStorage.setItem('snap_glow_cloud_sync_active', true);
-            
-            // Apply the selected role from the modal immediately
-            if (typeof selectedModalRoleVal === 'string') {
-                switchRole(selectedModalRoleVal);
-            }
-            
-            updateCloudUI();
+
+    // Set globals and persist
+    cloudRoomId = targetRoomId;
+    isCloudSyncActive = true;
+    localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
+    localStorage.setItem('snap_glow_cloud_sync_active', 'true');
+
+    // Apply the selected role from the modal immediately
+    if (typeof selectedModalRoleVal === 'string') {
+        switchRole(selectedModalRoleVal);
+    }
+
+    // Subscribe to Firestore room
+    subscribeToFirestoreRoom(targetRoomId);
+
+    // Initial check: if room doesn't exist, create it with local state
+    db.collection('rooms').doc(targetRoomId).get().then(snap => {
+        if (!snap.exists) {
             saveStateToStorage();
-            renderAll();
-            updateModalState();
-            alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
-        });
+            alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}")`);
+        } else {
+            alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍ "${targetRoomId}" ສຳເລັດແລ້ວ!`);
+        }
+    });
+
+    updateCloudUI();
+    renderAll();
+    updateModalState();
+    syncDevicePresence();
 }
 
 function disconnectCloudSync() {
@@ -1683,3 +1674,163 @@ function hexToString(hex) {
     return str;
 }
 
+// -------------------------------------------------------------
+// ADMIN PANEL & EVENT MANAGEMENT LOGIC
+// -------------------------------------------------------------
+function openAdminPanel() {
+    document.getElementById('admin-modal').classList.remove('hidden');
+    adminPinEntry = '';
+    updatePinDots();
+    document.getElementById('pin-error').classList.add('hidden');
+    document.getElementById('admin-pin-screen').classList.remove('hidden');
+    document.getElementById('admin-dashboard').classList.add('hidden');
+}
+
+function closeAdminPanel() {
+    document.getElementById('admin-modal').classList.add('hidden');
+}
+
+function pinInput(num) {
+    if (adminPinEntry.length < 4) {
+        adminPinEntry += num;
+        updatePinDots();
+    }
+}
+
+function pinClear() {
+    adminPinEntry = adminPinEntry.slice(0, -1);
+    updatePinDots();
+}
+
+function updatePinDots() {
+    for (let i = 0; i < 4; i++) {
+        const dot = document.getElementById(`dot-${i}`);
+        if (dot) {
+            if (i < adminPinEntry.length) dot.classList.add('active');
+            else dot.classList.remove('active');
+        }
+    }
+}
+
+function pinSubmit() {
+    if (adminPinEntry === ADMIN_PIN) {
+        document.getElementById('admin-pin-screen').classList.add('hidden');
+        document.getElementById('admin-dashboard').classList.remove('hidden');
+        loadAdminDashboard();
+    } else {
+        document.getElementById('pin-error').classList.remove('hidden');
+        adminPinEntry = '';
+        updatePinDots();
+    }
+}
+
+function showCreateEvent() {
+    document.getElementById('create-event-form').classList.remove('hidden');
+}
+
+function hideCreateEvent() {
+    document.getElementById('create-event-form').classList.add('hidden');
+    document.getElementById('new-event-name').value = '';
+}
+
+function ensureActiveEvent() {
+    if (!activeEventId) {
+        activeEventId = 'event_' + Date.now();
+        activeEventName = 'ງານທົ່ວໄປ (Default)';
+        localStorage.setItem('snap_glow_active_event_id', activeEventId);
+        localStorage.setItem('snap_glow_active_event_name', activeEventName);
+    }
+}
+
+function createNewEvent() {
+    const nameInput = document.getElementById('new-event-name').value.trim();
+    if (!nameInput) {
+        alert("ກະລຸນາໃສ່ຊື່ງານ (Please enter event name)");
+        return;
+    }
+
+    if (!confirm(`ທ່ານຕ້ອງການປິດງານເກົ່າ ແລະ ເລີ່ມງານໃໝ່ "${nameInput}" ໂດຍລີເຊັດຄິວກັບໄປທີ່ Q-001 ແທ້ບໍ່?`)) {
+        return;
+    }
+
+    activeEventId = 'event_' + Date.now();
+    activeEventName = nameInput;
+    localStorage.setItem('snap_glow_active_event_id', activeEventId);
+    localStorage.setItem('snap_glow_active_event_name', activeEventName);
+    
+    // Save event metadata to Firestore
+    if (isCloudSyncActive && cloudRoomId) {
+        db.collection('events').doc(activeEventId).set({
+            name: activeEventName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            roomId: cloudRoomId
+        }).catch(() => {});
+    }
+
+    // Reset local queue completely
+    resetState();
+    
+    hideCreateEvent();
+    loadAdminDashboard();
+    alert(`ສ້າງງານໃໝ່ "${activeEventName}" ສຳເລັດ! ເລີ່ມຄິວໃໝ່ແລ້ວ.`);
+}
+
+function loadAdminDashboard() {
+    // 1. Update active event info
+    document.getElementById('admin-active-event-name').textContent = activeEventName;
+    document.getElementById('admin-active-event-date').textContent = "ID: " + (activeEventId || 'None');
+
+    // 2. Load revenue
+    let totalRev = 0, cashRev = 0, transferRev = 0;
+    let counts = { none: 0, large: 0, small2: 0, combo: 0, large2: 0 };
+    let revs = { none: 0, large: 0, small2: 0, combo: 0, large2: 0 };
+
+    state.queue.forEach(item => {
+        // Only count completed/calling, or you can count all issued if preferred. We'll count all valid paid items
+        if (item.status !== 'skipped' && item.package) {
+            totalRev += (item.price || 0);
+            if (item.paymentMethod === 'cash') cashRev += (item.price || 0);
+            if (item.paymentMethod === 'transfer') transferRev += (item.price || 0);
+
+            if (counts[item.package] !== undefined) {
+                counts[item.package]++;
+                revs[item.package] += (item.price || 0);
+            }
+        }
+    });
+
+    document.getElementById('adm-rev-total').textContent = totalRev.toLocaleString() + ' ກີບ';
+    document.getElementById('adm-rev-cash').textContent = cashRev.toLocaleString() + ' ກີບ';
+    document.getElementById('adm-rev-transfer').textContent = transferRev.toLocaleString() + ' ກີບ';
+
+    document.getElementById('adm-rev-none').textContent = `${counts.none} ຄິວ — ${revs.none.toLocaleString()} ກີບ`;
+    document.getElementById('adm-rev-large').textContent = `${counts.large} ຄິວ — ${revs.large.toLocaleString()} ກີບ`;
+    document.getElementById('adm-rev-small2').textContent = `${counts.small2} ຄິວ — ${revs.small2.toLocaleString()} ກີບ`;
+    document.getElementById('adm-rev-combo').textContent = `${counts.combo} ຄິວ — ${revs.combo.toLocaleString()} ກີບ`;
+    document.getElementById('adm-rev-large2').textContent = `${counts.large2} ຄິວ — ${revs.large2.toLocaleString()} ກີບ`;
+
+    // 3. Load past events from firestore
+    const historyDiv = document.getElementById('admin-event-history');
+    if (isCloudSyncActive && cloudRoomId) {
+        db.collection('events').where('roomId', '==', cloudRoomId).orderBy('createdAt', 'desc').limit(10).get()
+        .then(snap => {
+            if (snap.empty) {
+                historyDiv.innerHTML = '<p style="color:var(--text-muted)">ບໍ່ມີປະຫວັດງານເກົ່າ</p>';
+                return;
+            }
+            let html = '<ul class="history-list">';
+            snap.forEach(doc => {
+                const d = doc.data();
+                const dateStr = d.createdAt ? d.createdAt.toDate().toLocaleDateString('lo-LA') : 'Unknown Date';
+                const isActive = doc.id === activeEventId;
+                html += `<li><strong>${d.name}</strong> <span style="font-size:0.8rem; color:var(--text-muted)">(${dateStr})</span> ${isActive ? '<span class="pkg-badge pkg-large">ກຳລັງໃຊ້ງານ</span>' : ''}</li>`;
+            });
+            html += '</ul>';
+            historyDiv.innerHTML = html;
+        }).catch(e => {
+            historyDiv.innerHTML = `<p style="color:red">Failed to load history: ${e.message}</p>`;
+        });
+    } else {
+        historyDiv.innerHTML = '<p style="color:var(--text-muted)">Cloud Sync ຖືກປິດ. ບໍ່ສາມາດດຶງປະຫວັດໄດ້.</p>';
+    }
+}
