@@ -1805,6 +1805,19 @@ function createNewEvent() {
 }
 
 function loadAdminDashboard() {
+    // 0. Update active group UI
+    const groupEl = document.getElementById('admin-current-group');
+    const groupSel = document.getElementById('admin-group-select');
+    if (groupEl && groupSel) {
+        groupEl.textContent = cloudRoomId || 'None';
+        if (['group1', 'group2', 'group3'].includes(cloudRoomId)) {
+            groupSel.value = cloudRoomId;
+        } else {
+            // If it's a custom room ID, we could add it dynamically, but for now just clear selection
+            groupSel.value = '';
+        }
+    }
+
     // 1. Update active event info
     document.getElementById('admin-active-event-name').textContent = activeEventName;
     document.getElementById('admin-active-event-date').textContent = "ID: " + (activeEventId || 'None');
@@ -1936,4 +1949,18 @@ function resumeEvent(eventId) {
     }).catch(e => {
         alert('ເກີດຂໍ້ຜິດພາດ: ' + e.message);
     });
+}
+
+function adminSwitchGroup(groupId) {
+    if (!groupId) return;
+    
+    // Connect to the new group
+    connectToCloudRoomById(groupId);
+    
+    // Wait briefly for firestore listener to attach and then reload dashboard
+    setTimeout(() => {
+        loadAdminDashboard();
+        updateOpTables();
+        updateTvUI();
+    }, 500);
 }

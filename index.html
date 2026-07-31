@@ -532,6 +532,14 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <!-- Active Event Info -->
                         <div class="admin-section glass-card" style="padding: 20px; border-radius: 16px; border: 1px solid var(--border-color);">
+                            <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.03); padding: 8px 12px; border-radius: 10px;">
+                                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);"><i data-lucide="globe" style="width: 14px; height: 14px; margin-right: 4px;"></i> ກຸ່ມປັດຈຸບັນ (Group): <strong id="admin-current-group" style="color: var(--neon-gold);">Group 1</strong></div>
+                                <select id="admin-group-select" onchange="adminSwitchGroup(this.value)" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-color); outline: none;">
+                                    <option value="group1">ກຸ່ມ 1</option>
+                                    <option value="group2">ກຸ່ມ 2</option>
+                                    <option value="group3">ກຸ່ມ 3</option>
+                                </select>
+                            </div>
                             <div class="admin-event-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                                 <div>
                                     <h4 style="color: var(--neon-gold); font-size: 1.1rem; margin-bottom: 8px;">📍 ງານປັດຈຸບັນ (Active Event)</h4>
