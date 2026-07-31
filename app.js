@@ -1897,7 +1897,9 @@ function loadAdminDashboard() {
                 const d = doc.data();
                 const dateStr = d.createdAt ? d.createdAt.toDate().toLocaleDateString('lo-LA') : 'Unknown Date';
                 const isActive = doc.id === activeEventId;
-                const revText = d.revenue ? `ລາຍຮັບ: ${d.revenue.total.toLocaleString()} ກີບ` : 'ບໍ່ມີຂໍ້ມູນລາຍຮັບ';
+                const revText = isActive 
+                    ? `ລາຍຮັບ: ${totalRev.toLocaleString()} ກີບ`
+                    : (d.revenue ? `ລາຍຮັບ: ${d.revenue.total.toLocaleString()} ກີບ` : 'ບໍ່ມີຂໍ້ມູນລາຍຮັບ');
                 html += `<li>
                     <div style="display:flex; justify-content: space-between; align-items:center; width: 100%;">
                         <div>
