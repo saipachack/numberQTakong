@@ -31,7 +31,7 @@ const PACKAGE_CONFIG = {
     none:   { label: '🎫 ບໍ່ພິມ',        price: 50000,  desc: 'Digital ເທົ່ານັ້ນ' },
     large:  { label: '🖼️ ຮູບໃຫຍ່ 1 ໃບ', price: 100000, desc: 'A4 / ໃຫຍ່' },
     small2: { label: '📸 ຮູບນ້ອຍ 2 ໃບ', price: 100000, desc: '4×6 ສອງໃບ' },
-    combo:  { label: '🎁 Combo',          price: 150000, desc: 'ໃຫຍ່1 + ນ້ອຍ2' },
+    combo:  { label: '🎁 ໃຫຍ່ 1 + ນ້ອຍ 2',          price: 150000, desc: 'Combo Set' },
     large2: { label: '🖼️🖼️ ຮູບໃຫຍ່ 2 ໃບ', price: 150000, desc: 'A4 ສອງໃບ' }
 };
 
