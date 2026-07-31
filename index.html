@@ -78,34 +78,36 @@
 
                         <!-- Package Type Selection -->
                         <div class="package-section">
-                            <label class="section-label">📦 ປະເພດແພັກເກດ (Package Type)</label>
+                            <label class="section-label" style="font-size: 1.1rem; font-weight: 600; color: var(--text-color); margin-bottom: 15px; display: block;">
+                                <i data-lucide="package"></i> ປະເພດແພັກເກດ (Package Type)
+                            </label>
                             <div class="package-grid">
                                 <button class="pkg-btn" id="pkg-none" onclick="openPaymentModal('none')">
-                                    <div class="pkg-icon">🎫</div>
+                                    <div class="pkg-icon"><i data-lucide="image-off" style="width: 32px; height: 32px; color: #94a3b8;"></i></div>
                                     <div class="pkg-name">ບໍ່ພິມຮູບ</div>
                                     <div class="pkg-desc">Digital ເທົ່ານັ້ນ</div>
                                     <div class="pkg-price">50,000 ກີບ</div>
                                 </button>
                                 <button class="pkg-btn" id="pkg-large" onclick="openPaymentModal('large')">
-                                    <div class="pkg-icon">🖼️</div>
+                                    <div class="pkg-icon"><i data-lucide="image" style="width: 32px; height: 32px; color: #3b82f6;"></i></div>
                                     <div class="pkg-name">ຮູບໃຫຍ່ 1 ໃບ</div>
                                     <div class="pkg-desc">A4 / ໃຫຍ່</div>
                                     <div class="pkg-price">100,000 ກີບ</div>
                                 </button>
                                 <button class="pkg-btn" id="pkg-small2" onclick="openPaymentModal('small2')">
-                                    <div class="pkg-icon">📸</div>
+                                    <div class="pkg-icon"><i data-lucide="images" style="width: 32px; height: 32px; color: #10b981;"></i></div>
                                     <div class="pkg-name">ຮູບນ້ອຍ 2 ໃບ</div>
                                     <div class="pkg-desc">4×6 ສອງໃບ</div>
                                     <div class="pkg-price">100,000 ກີບ</div>
                                 </button>
                                 <button class="pkg-btn" id="pkg-combo" onclick="openPaymentModal('combo')">
-                                    <div class="pkg-icon">🎁</div>
+                                    <div class="pkg-icon"><i data-lucide="gift" style="width: 32px; height: 32px; color: #8b5cf6;"></i></div>
                                     <div class="pkg-name">Combo</div>
                                     <div class="pkg-desc">ໃຫຍ່ 1 + ນ້ອຍ 2</div>
                                     <div class="pkg-price">150,000 ກີບ</div>
                                 </button>
                                 <button class="pkg-btn" id="pkg-large2" onclick="openPaymentModal('large2')">
-                                    <div class="pkg-icon">🖼️🖼️</div>
+                                    <div class="pkg-icon"><i data-lucide="layers" style="width: 32px; height: 32px; color: #f59e0b;"></i></div>
                                     <div class="pkg-name">ຮູບໃຫຍ່ 2 ໃບ</div>
                                     <div class="pkg-desc">A4 ສອງໃບ</div>
                                     <div class="pkg-price">150,000 ກີບ</div>
@@ -133,16 +135,16 @@
                             
                             <div class="payment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
                                 <button class="pay-btn" id="pay-cash" onclick="selectPaymentAndSubmit('cash')">
-                                    <div class="pay-icon">💵</div>
-                                    <div class="pay-name">ເງິນສົດ</div>
+                                    <div class="pay-icon"><i data-lucide="banknote" style="width: 32px; height: 32px; color: #10b981;"></i></div>
+                                    <div class="pay-name" style="font-weight: 600; margin-top: 8px;">ເງິນສົດ</div>
                                 </button>
                                 <button class="pay-btn" id="pay-transfer" onclick="selectPaymentAndSubmit('transfer')">
-                                    <div class="pay-icon">📲</div>
-                                    <div class="pay-name">ໂອນເງິນ</div>
-                                <i data-lucide="arrow-left"></i> ກັບຄືນ
-                            </button>
-                            <button class="btn btn-primary btn-lg" id="btn-confirm-pkg" onclick="confirmPackageAndIssue()" disabled>
-                                <i data-lucide="check-circle"></i> ຢືນຢັນ & ອອກຄິວ
+                                    <div class="pay-icon"><i data-lucide="qr-code" style="width: 32px; height: 32px; color: #3b82f6;"></i></div>
+                                    <div class="pay-name" style="font-weight: 600; margin-top: 8px;">ໂອນເງິນ</div>
+                                </button>
+                            </div>
+                            <button class="btn btn-secondary" onclick="closePaymentModal()" style="width: 100%; border-radius: 12px; padding: 12px; margin-top: 10px;">
+                                ຍົກເລີກ (Cancel)
                             </button>
                         </div>
                     </div>
