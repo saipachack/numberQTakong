@@ -1828,12 +1828,18 @@ function createNewEvent() {
         }).catch(() => {});
     }
 
-    // Reset local queue completely
+    // Reset local queue completely and push new event info to cloud room
     resetState();
+    saveStateToStorage();
     
     hideCreateEvent();
-    loadAdminDashboard();
     alert(`ສ້າງງານໃໝ່ "${activeEventName}" ສຳເລັດ! ເລີ່ມຄິວໃໝ່ແລ້ວ.`);
+    
+    // Wait briefly for Firestore to index the new event before reloading history
+    setTimeout(() => {
+        loadAdminDashboard();
+        renderAll();
+    }, 1000);
 }
 
 function loadAdminDashboard() {
