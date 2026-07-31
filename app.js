@@ -1928,24 +1928,13 @@ function loadAdminDashboard() {
 function adminClearQueue() {
     if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຄິວທັງໝົດໃນງານນີ້? (ນີ້ຈະລຶບຄິວທີ່ກຳລັງລໍຖ້າ ແລະສຳເລັດແລ້ວທັງໝົດ, ແຕ່ຈະບໍ່ລຶບງານ)')) return;
     
-    // reset state properly and sync to cloud
+    // reset state properly and sync to cloud (saveStateToStorage also handles event backups)
     resetState();
+    saveStateToStorage();
     
-    // update firestore active event history
-    if (isCloudSyncActive && cloudRoomId && activeEventId) {
-        db.collection('events').doc(activeEventId).update({
-            queueData: [],
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-            alert('ລຶບຄິວສຳເລັດ!');
-            loadAdminDashboard();
-            renderAll();
-        }).catch(e => alert('Error: ' + e.message));
-    } else {
-        alert('ລຶບຄິວສຳເລັດ (Local)!');
-        loadAdminDashboard();
-        renderAll();
-    }
+    alert('ລຶບຄິວສຳເລັດ!');
+    loadAdminDashboard();
+    renderAll();
 }
 
 function resumeEvent(eventId) {
