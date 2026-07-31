@@ -17,6 +17,9 @@ let lastWriteTime = 0;
 let cloudRoomId = localStorage.getItem('snap_glow_cloud_room_id') || '';
 let isCloudSyncActive = localStorage.getItem('snap_glow_cloud_sync_active') === 'true';
 let selectedModalRoleVal = 'kiosk';
+let cloudBinId = localStorage.getItem('snap_glow_cloud_bin_id') || '';
+let presenceBinId = localStorage.getItem('snap_glow_cloud_presence_bin_id') || '';
+const MASTER_BIN_ID = 'adfbded';
 
 // Device Presence State
 const myDeviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
@@ -230,15 +233,21 @@ function loadStateFromStorage() {
 
 function loadStateFromServer() {
     if (isCloudSyncActive && cloudRoomId) {
+        if (!cloudBinId) return Promise.resolve(); // Skip polling if bin ID is not resolved yet
+        
         const fetchStartTime = Date.now();
-        // Fetch from keyvalue.immanuel.co
-        return fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${cloudRoomId}?t=${Date.now()}`)
+        // Fetch from extendsclass.com JSON Storage
+        return fetch(`https://extendsclass.com/api/json-storage/bin/${cloudBinId}?t=${Date.now()}`)
             .then(res => {
                 if (!res.ok) throw new Error("Cloud fetch failed");
                 return res.json();
             })
-            .then(val => {
-                if (!val) return;
+            .then(resObj => {
+                if (!resObj) return;
+                
+                // ExtendsClass returns the JSON object. We stored our value in the 'value' field.
+                const val = (resObj && typeof resObj === 'object' && resObj.value !== undefined) ? resObj.value : resObj;
+                
                 let data;
                 try {
                     if (typeof val === 'string' && /^[0-9a-z]{7,}$/.test(val)) {
@@ -247,7 +256,7 @@ function loadStateFromServer() {
                         const arr = val.split(',').map(Number);
                         data = decompressState(arr);
                     } else {
-                        let parsed = JSON.parse(val);
+                        let parsed = typeof val === 'string' ? JSON.parse(val) : val;
                         if (Array.isArray(parsed)) {
                             data = decompressState(parsed);
                         } else if (parsed && typeof parsed === 'object') {
@@ -256,7 +265,7 @@ function loadStateFromServer() {
                     }
                 } catch (e) {
                     try {
-                        const decoded = safeDecode(val);
+                        const decoded = typeof val === 'string' ? safeDecode(val) : safeDecode(JSON.stringify(val));
                         const parsed = JSON.parse(decoded);
                         if (Array.isArray(parsed)) {
                             data = decompressState(parsed);
@@ -265,13 +274,13 @@ function loadStateFromServer() {
                         }
                     } catch (e2) {
                         try {
-                            data = JSON.parse(hexToString(val));
+                            data = typeof val === 'string' ? JSON.parse(hexToString(val)) : val;
                         } catch (e3) {
                             try {
-                                data = JSON.parse(decodeURIComponent(val));
+                                data = typeof val === 'string' ? JSON.parse(decodeURIComponent(val)) : val;
                             } catch (e4) {
                                 try {
-                                    data = JSON.parse(val);
+                                    data = typeof val === 'string' ? JSON.parse(val) : val;
                                 } catch (e5) {
                                     return;
                                 }
@@ -329,13 +338,17 @@ function saveStateToStorage() {
     isUpdatingNetwork = true;
     
     if (isCloudSyncActive && cloudRoomId) {
+        if (!cloudBinId) {
+            isUpdatingNetwork = false;
+            return;
+        }
         const trimmedState = getTrimmedState();
         const valueToSend = compressCompactState(trimmedState);
-        // Write to keyvalue.immanuel.co
-        fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${cloudRoomId}/${valueToSend}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'data=1'
+        // Write to extendsclass.com JSON Storage
+        fetch(`https://extendsclass.com/api/json-storage/bin/${cloudBinId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: valueToSend })
         })
         .then(res => {
             if (!res.ok) throw new Error("Cloud write failed");
@@ -915,40 +928,124 @@ function connectCustomGroup() {
     connectToCloudRoomById(val);
 }
 
+function resolveRoomBins(roomId) {
+    const cachedBinId = localStorage.getItem('snap_glow_bin_id_' + roomId);
+    const cachedPresenceBinId = localStorage.getItem('snap_glow_presence_bin_id_' + roomId);
+    
+    if (cachedBinId && cachedPresenceBinId) {
+        return Promise.resolve({ cloudBinId: cachedBinId, presenceBinId: cachedPresenceBinId });
+    }
+    
+    // Otherwise, fetch from master bin
+    return fetch(`https://extendsclass.com/api/json-storage/bin/${MASTER_BIN_ID}`)
+        .then(res => {
+            if (!res.ok) throw new Error("Failed to read master database");
+            return res.json();
+        })
+        .then(mapping => {
+            const m = mapping || {};
+            const qBinId = m[roomId];
+            const pBinId = m[roomId + "_presence"];
+            
+            if (qBinId && pBinId) {
+                // Cache and return
+                localStorage.setItem('snap_glow_bin_id_' + roomId, qBinId);
+                localStorage.setItem('snap_glow_presence_bin_id_' + roomId, pBinId);
+                return { cloudBinId: qBinId, presenceBinId: pBinId };
+            }
+            
+            // Create new bins if not found in master database
+            const initialQueue = { value: compressCompactState(getTrimmedState()) };
+            const initialPresence = { value: "" };
+            
+            // Helper to create a single bin
+            const createBin = (data) => {
+                return fetch('https://extendsclass.com/api/json-storage/bin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                })
+                .then(r => {
+                    if (!r.ok) throw new Error("Failed to create data slot");
+                    return r.json();
+                })
+                .then(o => {
+                    if (!o || !o.id) throw new Error("Missing data slot identifier");
+                    return o.id;
+                });
+            };
+            
+            return createBin(initialQueue)
+                .then(newQBinId => {
+                    return createBin(initialPresence).then(newPBinId => {
+                        // Register in master map
+                        m[roomId] = newQBinId;
+                        m[roomId + "_presence"] = newPBinId;
+                        
+                        return fetch(`https://extendsclass.com/api/json-storage/bin/${MASTER_BIN_ID}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(m)
+                        })
+                        .then(updateRes => {
+                            if (!updateRes.ok) throw new Error("Failed to register database slot");
+                            
+                            // Cache and return
+                            localStorage.setItem('snap_glow_bin_id_' + roomId, newQBinId);
+                            localStorage.setItem('snap_glow_presence_bin_id_' + roomId, newPBinId);
+                            return { cloudBinId: newQBinId, presenceBinId: newPBinId };
+                        });
+                    });
+                });
+        });
+}
+
 function connectToCloudRoomById(targetRoomId) {
     if (!targetRoomId) return;
     
     // Show user a quick visual loading
     const activeIdText = document.getElementById('modal-active-room-id');
-    if (activeIdText) activeIdText.textContent = "ກຳລັງເຊື່ອມຕໍ່...";
+    if (activeIdText) activeIdText.textContent = "ກຳລັງເຊື່ອມຕໍ່ (ກວດສອບຖານຂໍ້ມູນ)...";
     
-    // Fetch state from keyvalue.immanuel.co
-    fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${targetRoomId}?t=${Date.now()}`)
+    resolveRoomBins(targetRoomId)
+        .then(resIds => {
+            cloudBinId = resIds.cloudBinId;
+            presenceBinId = resIds.presenceBinId;
+            localStorage.setItem('snap_glow_cloud_bin_id', cloudBinId);
+            localStorage.setItem('snap_glow_cloud_presence_bin_id', presenceBinId);
+            
+            if (activeIdText) activeIdText.textContent = "ກຳລັງໂຫຼດຂໍ້ມູນຄິວ...";
+            
+            // Fetch state from extendsclass.com JSON Storage
+            return fetch(`https://extendsclass.com/api/json-storage/bin/${cloudBinId}?t=${Date.now()}`);
+        })
         .then(res => {
             if (!res.ok) throw new Error("Invalid ID");
             return res.json();
         })
-        .then(val => {
+        .then(resObj => {
+            // ExtendsClass returns the JSON object. We stored our value in the 'value' field.
+            const val = (resObj && typeof resObj === 'object' && resObj.value !== undefined) ? resObj.value : resObj;
             if (!val) {
-                // Room is empty or new. Initialize it with current local state!
+                // Fallback: if value inside is empty (should not happen since we initialize it)
                 cloudRoomId = targetRoomId;
                 isCloudSyncActive = true;
                 localStorage.setItem('snap_glow_cloud_room_id', targetRoomId);
                 localStorage.setItem('snap_glow_cloud_sync_active', true);
                 
-                // Apply the selected role from the modal immediately
                 if (typeof selectedModalRoleVal === 'string') {
                     switchRole(selectedModalRoleVal);
                 }
                 
                 updateCloudUI();
-                saveStateToStorage(); // Pushes active state to the newly created room ID
+                saveStateToStorage();
                 renderAll();
                 updateModalState();
                 syncDevicePresence();
                 alert(`ເຊື່ອມຕໍ່ຫ້ອງອອນລາຍສຳເລັດແລ້ວ! (ສ້າງຫ້ອງໃໝ່ "${targetRoomId}" ດ້ວຍຂໍ້ມູນປັດຈຸບັນ)`);
                 return;
             }
+            
             let data;
             let isValid = false;
             try {
@@ -960,7 +1057,7 @@ function connectToCloudRoomById(targetRoomId) {
                     data = decompressState(arr);
                     if (validateState(data)) isValid = true;
                 } else {
-                    let parsed = JSON.parse(val);
+                    let parsed = typeof val === 'string' ? JSON.parse(val) : val;
                     if (Array.isArray(parsed)) {
                         data = decompressState(parsed);
                         if (validateState(data)) isValid = true;
@@ -973,7 +1070,7 @@ function connectToCloudRoomById(targetRoomId) {
             
             if (!isValid) {
                 try {
-                    const decoded = safeDecode(val);
+                    const decoded = typeof val === 'string' ? safeDecode(val) : safeDecode(JSON.stringify(val));
                     const parsed = JSON.parse(decoded);
                     if (Array.isArray(parsed)) {
                         data = decompressState(parsed);
@@ -987,15 +1084,15 @@ function connectToCloudRoomById(targetRoomId) {
             
             if (!isValid) {
                 try {
-                    data = JSON.parse(hexToString(val));
+                    data = typeof val === 'string' ? JSON.parse(hexToString(val)) : val;
                     if (validateState(data)) isValid = true;
                 } catch (e) {
                     try {
-                        data = JSON.parse(decodeURIComponent(val));
+                        data = typeof val === 'string' ? JSON.parse(decodeURIComponent(val)) : val;
                         if (validateState(data)) isValid = true;
                     } catch (e2) {
                         try {
-                            data = JSON.parse(val);
+                            data = typeof val === 'string' ? JSON.parse(val) : val;
                             if (validateState(data)) isValid = true;
                         } catch (e3) {}
                     }
@@ -1153,18 +1250,19 @@ function syncDevicePresence() {
         return;
     }
     
-    const presenceKey = `${cloudRoomId}_presence`;
+    if (!presenceBinId) return; // Skip if presence bin ID is not resolved yet
     
-    fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/yzqkpawz/${presenceKey}?t=${Date.now()}`)
+    fetch(`https://extendsclass.com/api/json-storage/bin/${presenceBinId}?t=${Date.now()}`)
         .then(res => {
             if (!res.ok) return null;
             return res.json();
         })
-        .then(val => {
+        .then(resObj => {
+            const val = (resObj && typeof resObj === 'object' && resObj.value !== undefined) ? resObj.value : resObj;
             let presenceMap = {};
             if (val) {
                 try {
-                    const decoded = safeDecode(val);
+                    const decoded = typeof val === 'string' ? safeDecode(val) : safeDecode(JSON.stringify(val));
                     const parsed = JSON.parse(decoded);
                     if (Array.isArray(parsed)) {
                         presenceMap = decompressPresence(parsed);
@@ -1173,13 +1271,13 @@ function syncDevicePresence() {
                     }
                 } catch (e) {
                     try {
-                        presenceMap = JSON.parse(hexToString(val));
+                        presenceMap = typeof val === 'string' ? JSON.parse(hexToString(val)) : val;
                     } catch(e2) {
                         try {
-                            presenceMap = JSON.parse(decodeURIComponent(val));
+                            presenceMap = typeof val === 'string' ? JSON.parse(decodeURIComponent(val)) : val;
                         } catch(e3) {
                             try {
-                                presenceMap = JSON.parse(val);
+                                presenceMap = typeof val === 'string' ? JSON.parse(val) : val;
                             } catch(e4) {}
                         }
                     }
@@ -1210,10 +1308,12 @@ function syncDevicePresence() {
             
             const compressed = compressPresence(activeMap);
             const valToSend = safeEncode(JSON.stringify(compressed));
-            fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/yzqkpawz/${presenceKey}/${valToSend}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'data=1'
+            
+            // Write updated presence to extendsclass.com JSON Storage
+            fetch(`https://extendsclass.com/api/json-storage/bin/${presenceBinId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: valToSend })
             }).catch(() => {});
         })
         .catch(() => {});
