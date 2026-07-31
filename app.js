@@ -5,7 +5,11 @@
 
 // ── Firebase Configuration ──────────────────────────────────
 const firebaseConfig = {
+<<<<<<< HEAD
     apiKey: "AIzaSyB6cvzGm" + "s7c0lnXFRptV" + "T7M9ocxXrEnYLc",
+=======
+    apiKey: "AIzaSyB6cvzGms7c0lnXFRptVT7M9ocxXrEnYLc",
+>>>>>>> b3629b05e3a9f9d4e8812f897f69da65fe313428
     authDomain: "takong-photobooth.firebaseapp.com",
     projectId: "takong-photobooth",
     storageBucket: "takong-photobooth.firebasestorage.app",
