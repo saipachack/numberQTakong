@@ -738,9 +738,7 @@ function setupSpeechVoices() {
 
 function speakTicket(ticketNumber) {
     if (!synth) return;
-    
-    synth.cancel();
-    
+    // Removed synth.cancel() because it is known to break the speech queue on iOS Safari when called immediately before speak()
     const parts = ticketNumber.split('-');
     const letter = parts[0];
     const digits = parts[1].split('').join(' ');
