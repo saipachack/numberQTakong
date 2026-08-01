@@ -261,7 +261,7 @@ function mergeQueues(serverQueue, localQueue, serverTicketCounter) {
         return bTime - aTime;
     });
     
-    const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 5);
+    const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 10);
     
     return [...waitingAndCalling, ...trimmedCompletedOrSkipped];
 }
@@ -476,8 +476,8 @@ function getTrimmedState() {
     // Sort completed/skipped by time descending
     completedOrSkipped.sort((a, b) => b.rawTime - a.rawTime);
     
-    // Keep only the most recent completed/skipped items (say 5 items)
-    const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 5);
+    // Keep only the most recent completed/skipped items (say 10 items)
+    const trimmedCompletedOrSkipped = completedOrSkipped.slice(0, 10);
     
     // Combine
     const trimmedQueue = [...waitingAndCalling, ...trimmedCompletedOrSkipped];
@@ -953,8 +953,8 @@ function renderAll() {
         waitingTableBody.innerHTML = waitingList.map(item => {
             const pkgCfg = item.package ? PACKAGE_CONFIG[item.package] : null;
             const pkgBadge = pkgCfg
-                ? `<span class="pkg-badge pkg-${item.package}">${pkgCfg.label}</span>`
-                : `<span class="pkg-badge pkg-none" style="opacity:0.4">—</span>`;
+                ? `<span style="font-size: 0.85rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; background: rgba(217,119,6,0.1); color: #d97706; border: 1px solid rgba(217,119,6,0.2); display: inline-block; white-space: nowrap;">${pkgCfg.label}</span>`
+                : `<span style="opacity:0.3">—</span>`;
             const payBadge = item.paymentMethod === 'cash'
                 ? `<span class="pay-badge pay-cash">💵</span>`
                 : item.paymentMethod === 'transfer'
@@ -983,7 +983,7 @@ function renderAll() {
         completedTableBody.innerHTML = sortedCompleted.map(item => {
             const pkgCfg = item.package ? PACKAGE_CONFIG[item.package] : null;
             const pkgBadge = pkgCfg
-                ? `<span class="pkg-badge pkg-${item.package}">${pkgCfg.label}</span>`
+                ? `<span style="font-size: 0.85rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; background: rgba(217,119,6,0.1); color: #d97706; border: 1px solid rgba(217,119,6,0.2); display: inline-block; white-space: nowrap;">${pkgCfg.label}</span>`
                 : `<span style="opacity:0.3">—</span>`;
             const payBadge = item.paymentMethod === 'cash'
                 ? `<span class="pay-badge pay-cash">💵 ສົດ</span>`
