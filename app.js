@@ -711,14 +711,16 @@ function setupSpeechVoices() {
     
     select.innerHTML = '';
     
+    const kanyaVoice = availableVoices.find(v => v.name.toLowerCase().includes('kanya'));
     const thaiVoices = availableVoices.filter(v => v.lang.includes('th') || v.lang.includes('lo'));
     
-    if (thaiVoices.length === 0) {
-        const defOpt = document.createElement('option');
-        defOpt.value = 'default';
-        defOpt.textContent = 'ບໍ່ພົບສຽງພາສາໄທ (ລະບົບຈະໃຊ້ສຽງເລີ່ມຕົ້ນ)';
-        select.appendChild(defOpt);
-    } else {
+    if (kanyaVoice) {
+        const option = document.createElement('option');
+        option.value = availableVoices.indexOf(kanyaVoice);
+        option.textContent = `✅ ${kanyaVoice.name} (LOCKED)`;
+        option.selected = true;
+        select.appendChild(option);
+    } else if (thaiVoices.length > 0) {
         thaiVoices.forEach((voice) => {
             const index = availableVoices.indexOf(voice);
             const option = document.createElement('option');
@@ -727,6 +729,11 @@ function setupSpeechVoices() {
             option.selected = true;
             select.appendChild(option);
         });
+    } else {
+        const defOpt = document.createElement('option');
+        defOpt.value = 'default';
+        defOpt.textContent = 'ບໍ່ພົບສຽງ Kanya ຫຼື ສຽງໄທໃນເຄື່ອງ';
+        select.appendChild(defOpt);
     }
 }
 
@@ -746,13 +753,15 @@ function speakTicket(ticketNumber) {
     if (selectedVoiceIndex !== 'default') {
         chosenVoice = availableVoices[parseInt(selectedVoiceIndex)];
     } else {
-        chosenVoice = availableVoices.find(v => v.lang.includes('th') || v.lang.includes('lo'));
+        chosenVoice = availableVoices.find(v => v.name.toLowerCase().includes('kanya')) 
+                   || availableVoices.find(v => v.lang.includes('th') || v.lang.includes('lo'));
     }
     
     // Force Thai announcement
     let announcementText = `ขอเชิญหมายเลขคิว ${letter} ${digits} ที่ห้องถ่ายภาพค่ะ`;
     
     const utterance = new SpeechSynthesisUtterance(announcementText);
+    utterance.lang = 'th-TH'; // Explicitly set lang to fix iOS/Safari silence
     if (chosenVoice) {
         utterance.voice = chosenVoice;
     }
