@@ -689,9 +689,8 @@ function playNotificationChime(callback) {
             osc.stop(ctx.currentTime + timing[index] + 0.6);
         });
         
-        setTimeout(() => {
-            if (callback) callback();
-        }, 800);
+        // Execute callback immediately to prevent iOS Safari from blocking SpeechSynthesis (must be synchronous to user click)
+        if (callback) callback();
         
     } catch (e) {
         console.error("Web Audio API blocked or not supported", e);
