@@ -711,20 +711,23 @@ function setupSpeechVoices() {
     
     select.innerHTML = '';
     
-    const defOpt = document.createElement('option');
-    defOpt.value = 'default';
-    defOpt.textContent = 'ສຽງລະບົບຫຼັກ (Default System Voice)';
-    select.appendChild(defOpt);
+    const thaiVoices = availableVoices.filter(v => v.lang.includes('th') || v.lang.includes('lo'));
     
-    availableVoices.forEach((voice, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = `${voice.name} (${voice.lang})`;
-        if (voice.lang.includes('th-TH') || voice.lang.includes('lo-LA')) {
+    if (thaiVoices.length === 0) {
+        const defOpt = document.createElement('option');
+        defOpt.value = 'default';
+        defOpt.textContent = 'ບໍ່ພົບສຽງພາສາໄທ (ລະບົບຈະໃຊ້ສຽງເລີ່ມຕົ້ນ)';
+        select.appendChild(defOpt);
+    } else {
+        thaiVoices.forEach((voice) => {
+            const index = availableVoices.indexOf(voice);
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = `${voice.name} (${voice.lang})`;
             option.selected = true;
-        }
-        select.appendChild(option);
-    });
+            select.appendChild(option);
+        });
+    }
 }
 
 function speakTicket(ticketNumber) {
@@ -739,9 +742,6 @@ function speakTicket(ticketNumber) {
     const select = document.getElementById('voice-select');
     let selectedVoiceIndex = select ? select.value : 'default';
     
-    let announcementText = "";
-    let isThaiLao = false;
-    
     let chosenVoice = null;
     if (selectedVoiceIndex !== 'default') {
         chosenVoice = availableVoices[parseInt(selectedVoiceIndex)];
@@ -749,15 +749,8 @@ function speakTicket(ticketNumber) {
         chosenVoice = availableVoices.find(v => v.lang.includes('th') || v.lang.includes('lo'));
     }
     
-    if (chosenVoice && (chosenVoice.lang.includes('th') || chosenVoice.lang.includes('lo'))) {
-        isThaiLao = true;
-    }
-    
-    if (isThaiLao) {
-        announcementText = `ขอเชิญหมายเลขคิว ${letter} ${digits} ที่ห้องถ่ายภาพค่ะ`;
-    } else {
-        announcementText = `Now calling ticket number ${letter}, ${digits}. Please proceed to the photobooth.`;
-    }
+    // Force Thai announcement
+    let announcementText = `ขอเชิญหมายเลขคิว ${letter} ${digits} ที่ห้องถ่ายภาพค่ะ`;
     
     const utterance = new SpeechSynthesisUtterance(announcementText);
     if (chosenVoice) {
